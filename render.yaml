@@ -1,7 +1,7 @@
-# Blueprint de Render: API + Postgres. Ajusta los planes a tu gusto.
+# Blueprint de Render: API + Postgres en planes GRATUITOS (para pruebas). Para producción sube a planes de pago.
 databases:
   - name: quot-crm-db
-    plan: basic-256mb        # el plan free de Render borra la base a los 30 días
+    plan: free             # Postgres gratis de Render: se elimina a los 30 días (para pruebas)
     databaseName: quot_crm
 
 services:
@@ -9,7 +9,7 @@ services:
     name: quot-crm-api
     runtime: node
     rootDir: backend
-    plan: starter            # el plan free "duerme" la API tras 15 min sin uso
+    plan: free             # se "duerme" tras 15 min sin uso; el primer request tarda ~1 min
     buildCommand: npm ci
     startCommand: npm start
     healthCheckPath: /health
