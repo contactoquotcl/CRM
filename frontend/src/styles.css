@@ -113,6 +113,9 @@ table.items td.num { padding-top: 14px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; max-width: 640px; }
 .chip { font: inherit; font-size: 12px; padding: 3px 11px; border-radius: 999px; border: 1px solid #94a3b8; background: #fff; cursor: pointer; color: var(--ink); }
 .chip.on { color: #fff; }
+.chip.creator { border-color: #64748b; }
+.chip.creator.on { background: var(--ink); border-color: var(--ink); }
+.card-owner { margin-top: 4px; }
 .quick { gap: 6px; margin-top: 2px; }
 .lead-card { position: relative; }
 .lead-card.dragging { opacity: .45; }

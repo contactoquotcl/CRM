@@ -49,6 +49,12 @@ leadsRouter.get('/', async (req, res) => {
     params.push(ids);
     where.push(`l.state_id = ANY($${params.length}::int[])`);
   }
+  // Creador: created_by=2 o created_by=1,2
+  const creators = String(req.query.created_by || '').split(',').map(Number).filter((n) => Number.isInteger(n) && n > 0);
+  if (creators.length) {
+    params.push(creators);
+    where.push(`l.created_by = ANY($${params.length}::int[])`);
+  }
   // Fechas: date_field=state (fecha en que pasó a su estado actual, por defecto) | lead (fecha de creación del lead)
   const dateExpr = req.query.date_field === 'lead' ? 'COALESCE(l.lead_date, l.created_at::date)' : 'COALESCE(l.state_date, l.lead_date)';
   const from = req.query.from ? parseDate(req.query.from) : null;
@@ -93,11 +99,17 @@ leadsRouter.put('/:id/move', async (req, res) => {
   res.json(out.rows[0]);
 });
 
+// Usuarios que han creado leads (para el filtro por creador del pipeline; disponible para todos los roles).
+leadsRouter.get('/creators', async (_req, res) => {
+  const { rows } = await query('SELECT DISTINCT u.id, u.name FROM leads l JOIN users u ON u.id = l.created_by ORDER BY u.name');
+  res.json(rows);
+});
+
 leadsRouter.get('/:id', async (req, res) => {
   const id = Number(req.params.id);
   const { rows } = await query(`${LEAD_SELECT} WHERE l.id=$1`, [id]);
   if (!rows[0]) throw new HttpError(404, 'Lead no encontrado');
-  const q = await query('SELECT id, number, quote_date::text AS quote_date, total FROM quotes WHERE lead_id=$1 ORDER BY number DESC', [id]);
+  const q = await query('SELECT q.id, q.number, q.quote_date::text AS quote_date, q.total, u.name AS created_by_name FROM quotes q LEFT JOIN users u ON u.id=q.created_by WHERE q.lead_id=$1 ORDER BY q.number DESC', [id]);
   res.json({ ...rows[0], quotes: q.rows });
 });
 

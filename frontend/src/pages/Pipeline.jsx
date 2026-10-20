@@ -31,6 +31,8 @@ export default function Pipeline() {
   const [leads, setLeads] = useState([]);
   const [q, setQ] = useState('');
   const [selStates, setSelStates] = useState([]); // vacío = todos
+  const [creators, setCreators] = useState([]);
+  const [selCreators, setSelCreators] = useState([]); // vacío = todos
   const [dateField, setDateField] = useState('state'); // state | lead
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -45,17 +47,19 @@ export default function Pipeline() {
     const p = new URLSearchParams();
     if (q) p.set('q', q);
     if (selStates.length) p.set('state_ids', selStates.join(','));
+    if (selCreators.length) p.set('created_by', selCreators.join(','));
     if (from) p.set('from', from);
     if (to) p.set('to', to);
     if (from || to) p.set('date_field', dateField);
     const s = p.toString();
     return s ? `?${s}` : '';
-  }, [q, selStates, from, to, dateField]);
+  }, [q, selStates, selCreators, from, to, dateField]);
 
   const load = useCallback(async () => {
     try {
-      const [s, l] = await Promise.all([api.get('/api/states'), api.get('/api/leads' + qs)]);
+      const [s, l, c] = await Promise.all([api.get('/api/states'), api.get('/api/leads' + qs), api.get('/api/leads/creators')]);
       setStates(s);
+      setCreators(c);
       setLeads(l);
       setError('');
     } catch (e) {
@@ -75,7 +79,7 @@ export default function Pipeline() {
   }, [states, leads]);
 
   const visibleStates = selStates.length ? states.filter((s) => selStates.includes(s.id)) : states;
-  const filtered = !!(q || selStates.length || from || to);
+  const filtered = !!(q || selStates.length || selCreators.length || from || to);
 
   // Mueve/reordena un lead (arrastrando o con las flechas). Actualiza al instante y guarda en el servidor.
   const moveLead = async (leadId, stateId, pos = {}) => {
@@ -116,8 +120,9 @@ export default function Pipeline() {
   };
 
   const toggleState = (id) => setSelStates((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
+  const toggleCreator = (id) => setSelCreators((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
   const setRange = (f, t) => { setFrom(f); setTo(t); };
-  const clearFilters = () => { setQ(''); setSelStates([]); setFrom(''); setTo(''); };
+  const clearFilters = () => { setQ(''); setSelStates([]); setSelCreators([]); setFrom(''); setTo(''); };
 
   const noState = byState.get(null) || byState.get(undefined) || [];
   const tableRows = useMemo(
@@ -149,6 +154,15 @@ export default function Pipeline() {
                 </button>
               );
             })}
+          </div>
+        </div>
+        <div className="filter-group">
+          <span className="field-label">Creador</span>
+          <div className="chips">
+            {creators.map((c) => (
+              <button key={c.id} type="button" className={`chip creator ${selCreators.includes(c.id) ? 'on' : ''}`} onClick={() => toggleCreator(c.id)}>{c.name}</button>
+            ))}
+            {!creators.length && <span className="muted small">—</span>}
           </div>
         </div>
         <div className="filter-group">
@@ -211,6 +225,7 @@ export default function Pipeline() {
                         <strong>{l.total ? clp(l.total) : '—'}</strong>
                         <span className="muted small">{fmtDate(l.state_date || l.lead_date)}</span>
                       </div>
+                      {l.owner_name && <div className="muted small card-owner">👤 {l.owner_name}</div>}
                       <div className="card-order" onClick={(e) => e.stopPropagation()}>
                         <button type="button" className="mini" title="Subir" aria-label="Subir" disabled={i === 0} onClick={() => moveLead(l.id, s.id, { beforeId: list[i - 1].id })}>▲</button>
                         <button type="button" className="mini" title="Bajar" aria-label="Bajar" disabled={i === list.length - 1} onClick={() => moveLead(l.id, s.id, { afterId: list[i + 1].id })}>▼</button>
@@ -239,7 +254,7 @@ export default function Pipeline() {
         <div className="table-wrap">
           <table>
             <thead>
-              <tr><th>N°</th><th>Cliente</th><th>RUT</th><th>Contacto</th><th>Estado</th><th>Fecha estado</th><th>Creación</th><th className="num">Total c/IVA</th></tr>
+              <tr><th>N°</th><th>Cliente</th><th>RUT</th><th>Contacto</th><th>Estado</th><th>Fecha estado</th><th>Creación</th><th>Creador</th><th className="num">Total c/IVA</th></tr>
             </thead>
             <tbody>
               {tableRows.map((l) => (
@@ -251,6 +266,7 @@ export default function Pipeline() {
                   <td>{l.state_name ? <Badge color={l.state_color}>{l.state_name}</Badge> : ''}</td>
                   <td>{fmtDate(l.state_date || l.lead_date)}</td>
                   <td>{fmtDate(l.lead_date)}</td>
+                  <td>{l.owner_name || ''}</td>
                   <td className="num">{l.total ? clp(l.total) : ''}</td>
                 </tr>
               ))}
@@ -311,6 +327,7 @@ function LeadModal({ id, states, onClose, onSaved }) {
   return (
     <Modal title={isNew ? 'Nuevo lead' : `Lead${f.quote_number ? ` · Cotización N° ${f.quote_number}` : ''}`} onClose={onClose} wide>
       <Alert>{error}</Alert>
+      {!isNew && f.owner_name && <p className="muted small" style={{ marginTop: 0 }}>Creado por <strong>{f.owner_name}</strong></p>}
       <div className="grid2">
         <Field label="Razón social"><input value={f.razon_social || ''} onChange={set('razon_social')} /></Field>
         <Field label="Cliente / nombre comercial"><input value={f.client_name || ''} onChange={set('client_name')} /></Field>
@@ -343,7 +360,7 @@ function LeadModal({ id, states, onClose, onSaved }) {
             <ul className="plain">
               {quotes.map((qt) => (
                 <li key={qt.id} className="row between">
-                  <span>N° {qt.number} · {fmtDate(qt.quote_date)} · {clp(qt.total)}</span>
+                  <span>N° {qt.number} · {fmtDate(qt.quote_date)} · {clp(qt.total)}{qt.created_by_name ? ` · por ${qt.created_by_name}` : ''}</span>
                   <button className="btn small" onClick={() => api.openPdf(qt.id).catch((e) => setError(e.message))}>Ver PDF</button>
                 </li>
               ))}

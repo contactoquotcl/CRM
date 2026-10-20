@@ -7,8 +7,9 @@ import { renderQuotePdf } from '../pdf.js';
 export const quotesRouter = Router();
 quotesRouter.use(authenticate);
 
-const QUOTE_SELECT = `SELECT id, number, lead_id, quote_date::text AS quote_date, validity_days, rut, razon_social, email, contact, phone,
-  notes, iva_rate, margin_pct, subtotal, iva, total, created_by, created_at FROM quotes`;
+const QUOTE_SELECT = `SELECT q.id, q.number, q.lead_id, q.quote_date::text AS quote_date, q.validity_days, q.rut, q.razon_social, q.email, q.contact, q.phone,
+  q.notes, q.iva_rate, q.margin_pct, q.subtotal, q.iva, q.total, q.created_by, q.created_at, u.name AS created_by_name
+  FROM quotes q LEFT JOIN users u ON u.id = q.created_by`;
 
 quotesRouter.get('/', async (req, res) => {
   const q = String(req.query.q || '').trim().toLowerCase();
@@ -16,15 +17,15 @@ quotesRouter.get('/', async (req, res) => {
   let where = '';
   if (q) {
     params.push(`%${q}%`);
-    where = `WHERE LOWER(razon_social) LIKE $1 OR LOWER(rut) LIKE $1 OR CAST(number AS TEXT) LIKE $1 OR LOWER(contact) LIKE $1`;
+    where = `WHERE LOWER(q.razon_social) LIKE $1 OR LOWER(q.rut) LIKE $1 OR CAST(q.number AS TEXT) LIKE $1 OR LOWER(q.contact) LIKE $1 OR LOWER(u.name) LIKE $1`;
   }
-  const { rows } = await query(`${QUOTE_SELECT} ${where} ORDER BY number DESC LIMIT 500`, params);
+  const { rows } = await query(`${QUOTE_SELECT} ${where} ORDER BY q.number DESC LIMIT 500`, params);
   res.json(rows);
 });
 
 quotesRouter.get('/:id', async (req, res) => {
   const id = Number(req.params.id);
-  const { rows } = await query(`${QUOTE_SELECT} WHERE id=$1`, [id]);
+  const { rows } = await query(`${QUOTE_SELECT} WHERE q.id=$1`, [id]);
   if (!rows[0]) throw new HttpError(404, 'Cotización no encontrada');
   const items = await query('SELECT id, position, product_id, sku, description, qty, cost, margin_pct, unit_price, line_total FROM quote_items WHERE quote_id=$1 ORDER BY position', [id]);
   res.json({ ...rows[0], items: items.rows });
@@ -32,7 +33,7 @@ quotesRouter.get('/:id', async (req, res) => {
 
 quotesRouter.get('/:id/pdf', async (req, res) => {
   const id = Number(req.params.id);
-  const { rows } = await query(`${QUOTE_SELECT} WHERE id=$1`, [id]);
+  const { rows } = await query(`${QUOTE_SELECT} WHERE q.id=$1`, [id]);
   if (!rows[0]) throw new HttpError(404, 'Cotización no encontrada');
   const items = await query('SELECT sku, description, qty, unit_price, line_total FROM quote_items WHERE quote_id=$1 ORDER BY position', [id]);
   // El PDF es para el cliente: solo recibe datos de venta (nunca costo ni margen).

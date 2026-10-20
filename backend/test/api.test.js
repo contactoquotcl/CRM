@@ -232,3 +232,24 @@ test('pipeline: reordenar leads dentro y entre etapas, y filtrar por estado y fe
   assert.equal(f6.data.length, 0);
   assert.equal((await api('GET', '/api/leads?from=nada', { token: userToken })).status, 400);
 });
+
+test('creador: la cotización registra quién la creó y el pipeline filtra por creador', async () => {
+  const me = (await api('GET', '/api/auth/me', { token: userToken })).data;
+  const meId = (me.user || me).id;
+  const body = { client: { rut: '76.086.428-5', razon_social: 'Creador SpA', email: 'c@c.cl', contact: 'C', phone: '1' }, margin: 20, items: [{ description: 'Cosa', qty: 1, cost: 800 }] };
+  const q = await api('POST', '/api/quotes', { token: userToken, body });
+  assert.equal(q.status, 201);
+  const det = await api('GET', `/api/quotes/${q.data.id}`, { token: adminToken });
+  assert.equal(det.data.created_by, meId);
+  assert.ok(det.data.created_by_name);
+  const list = await api('GET', '/api/quotes?q=creador', { token: adminToken });
+  assert.equal(list.data[0].created_by_name, det.data.created_by_name);
+
+  const creators = await api('GET', '/api/leads/creators', { token: userToken });
+  assert.ok(creators.data.some((c) => c.id === meId));
+  const mine = await api('GET', `/api/leads?q=creador&created_by=${meId}`, { token: adminToken });
+  assert.equal(mine.data.length, 1);
+  assert.equal(mine.data[0].owner_name, det.data.created_by_name);
+  const none = await api('GET', '/api/leads?q=creador&created_by=999999', { token: adminToken });
+  assert.equal(none.data.length, 0);
+});
