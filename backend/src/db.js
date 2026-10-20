@@ -172,7 +172,20 @@ export async function initDb() {
     ALTER TABLE quotes ADD COLUMN IF NOT EXISTS margin_pct DOUBLE PRECISION NOT NULL DEFAULT 0;
     ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS cost INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS margin_pct DOUBLE PRECISION NOT NULL DEFAULT 0;
+    ALTER TABLE leads ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0;
   `);
+
+  // Orden manual dentro de cada etapa (sort_order ascendente; los leads nuevos entran con 0 = arriba).
+  // Una sola vez: numera los leads existentes con el orden que ya tenían (fecha más reciente primero).
+  const flag = await impl.query("SELECT 1 FROM settings WHERE key='leads_order_initialized'");
+  if (!flag.rows.length) {
+    await impl.exec(`
+      UPDATE leads l SET sort_order = r.rn
+      FROM (SELECT id, ROW_NUMBER() OVER (PARTITION BY state_id ORDER BY COALESCE(state_date, lead_date) DESC NULLS LAST, id DESC)::int AS rn FROM leads) r
+      WHERE r.id = l.id;
+    `);
+    await impl.query("INSERT INTO settings(key,value) VALUES('leads_order_initialized','1') ON CONFLICT (key) DO NOTHING");
+  }
 
   for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) {
     await impl.query('INSERT INTO settings(key,value) VALUES($1,$2) ON CONFLICT (key) DO NOTHING', [k, v]);

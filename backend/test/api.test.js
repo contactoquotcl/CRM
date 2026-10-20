@@ -182,3 +182,53 @@ test('importación de pipeline desde Notion (CSV mapeado)', async () => {
   const q = await api('POST', '/api/quotes', { token: userToken, body });
   assert.equal(q.data.number, 481);
 });
+
+test('pipeline: reordenar leads dentro y entre etapas, y filtrar por estado y fecha', async () => {
+  const states = (await api('GET', '/api/states', { token: userToken })).data;
+  const A = states[0].id, B = states[1].id;
+  const mk = async (name, state_id, lead_date) =>
+    (await api('POST', '/api/leads', { token: userToken, body: { client_name: name, state_id, lead_date } })).data;
+  const a1 = await mk('Orden-A1', A, '2026-01-10');
+  const a2 = await mk('Orden-A2', A, '2026-02-10');
+  const a3 = await mk('Orden-A3', A, '2026-03-10');
+  const names = async (qs = '') => (await api('GET', `/api/leads?q=orden-${qs}`, { token: userToken })).data.filter((l) => l.client_name.startsWith('Orden-'));
+  const col = async (state) => (await names()).filter((l) => l.state_id === state).map((l) => l.client_name);
+
+  // Los nuevos entran arriba (más reciente primero)
+  assert.deepEqual(await col(A), ['Orden-A3', 'Orden-A2', 'Orden-A1']);
+
+  // Subir A1 al primer lugar (antes de A3)
+  assert.equal((await api('PUT', `/api/leads/${a1.id}/move`, { token: userToken, body: { state_id: A, before_id: a3.id } })).status, 200);
+  assert.deepEqual(await col(A), ['Orden-A1', 'Orden-A3', 'Orden-A2']);
+
+  // Dejar A1 después de A2 (al final)
+  await api('PUT', `/api/leads/${a1.id}/move`, { token: userToken, body: { state_id: A, after_id: a2.id } });
+  assert.deepEqual(await col(A), ['Orden-A3', 'Orden-A2', 'Orden-A1']);
+
+  // Pasar A2 a otra etapa: cambia el estado y la fecha del estado, y queda en esa columna
+  const moved = await api('PUT', `/api/leads/${a2.id}/move`, { token: userToken, body: { state_id: B } });
+  assert.equal(moved.data.state_id, B);
+  assert.match(moved.data.state_date, /^\d{4}-\d{2}-\d{2}$/);
+  assert.deepEqual(await col(A), ['Orden-A3', 'Orden-A1']);
+  assert.deepEqual(await col(B), ['Orden-A2']);
+
+  // Errores
+  assert.equal((await api('PUT', `/api/leads/${a1.id}/move`, { token: userToken, body: { state_id: 99999 } })).status, 400);
+  assert.equal((await api('PUT', `/api/leads/999999/move`, { token: userToken, body: { state_id: A } })).status, 404);
+
+  // Filtros: por estado, por rango de fechas del lead y combinados
+  const f1 = await api('GET', `/api/leads?q=orden-&state_ids=${B}`, { token: userToken });
+  assert.deepEqual(f1.data.map((l) => l.client_name), ['Orden-A2']);
+  const f2 = await api('GET', `/api/leads?q=orden-&state_ids=${A},${B}`, { token: userToken });
+  assert.equal(f2.data.length, 3);
+  const f3 = await api('GET', '/api/leads?q=orden-&date_field=lead&from=2026-02-01&to=2026-03-31', { token: userToken });
+  assert.deepEqual(f3.data.map((l) => l.client_name).sort(), ['Orden-A2', 'Orden-A3']);
+  const f4 = await api('GET', `/api/leads?q=orden-&date_field=lead&from=2026-02-01&state_ids=${A}`, { token: userToken });
+  assert.deepEqual(f4.data.map((l) => l.client_name), ['Orden-A3']);
+  const f5 = await api('GET', '/api/leads?q=orden-&date_field=lead&to=2026-01-31', { token: userToken });
+  assert.deepEqual(f5.data.map((l) => l.client_name), ['Orden-A1']);
+  // por fecha del estado: los tres cambiaron de estado/se crearon hoy
+  const f6 = await api('GET', '/api/leads?q=orden-&from=2020-01-01&to=2020-12-31', { token: userToken });
+  assert.equal(f6.data.length, 0);
+  assert.equal((await api('GET', '/api/leads?from=nada', { token: userToken })).status, 400);
+});

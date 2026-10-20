@@ -105,6 +105,27 @@ table.items td.num { padding-top: 14px; }
 .card-title { font-weight: 600; margin-bottom: 2px; word-break: break-word; }
 .card-foot { display: flex; justify-content: space-between; margin-top: 8px; }
 
+/* filtros y orden del pipeline */
+.filters { display: flex; gap: 20px 28px; flex-wrap: wrap; align-items: flex-start; padding: 12px 16px; }
+.filter-group { display: flex; flex-direction: column; gap: 4px; }
+.filter-group .row select, .filter-group .row input[type=date] { width: auto; padding: 5px 8px; }
+.filter-end { margin-left: auto; align-items: flex-end; justify-content: flex-end; align-self: flex-end; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; max-width: 640px; }
+.chip { font: inherit; font-size: 12px; padding: 3px 11px; border-radius: 999px; border: 1px solid #94a3b8; background: #fff; cursor: pointer; color: var(--ink); }
+.chip.on { color: #fff; }
+.quick { gap: 6px; margin-top: 2px; }
+.lead-card { position: relative; }
+.lead-card.dragging { opacity: .45; }
+.lead-card.drop-before { box-shadow: 0 -3px 0 0 var(--accent); }
+.lead-card.drop-after { box-shadow: 0 3px 0 0 var(--accent); }
+.card-order { position: absolute; right: 6px; top: 6px; display: flex; gap: 2px; opacity: 0; transition: opacity .12s; }
+.lead-card:hover .card-order, .lead-card:focus-within .card-order { opacity: 1; }
+@media (hover: none) { .card-order { opacity: 1; } }
+.mini { font-size: 10px; line-height: 1; padding: 4px 5px; border: 1px solid var(--line); border-radius: 4px; background: #fff; color: var(--muted); cursor: pointer; }
+.mini:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+.mini:disabled { opacity: .35; cursor: default; }
+.card-title { padding-right: 46px; }
+
 /* modal */
 .overlay { position: fixed; inset: 0; background: rgba(15,23,42,.5); display: flex; align-items: flex-start; justify-content: center; padding: 40px 16px; overflow-y: auto; z-index: 50; }
 .modal { background: #fff; border-radius: 10px; width: 100%; max-width: 520px; box-shadow: 0 20px 50px rgba(0,0,0,.3); }

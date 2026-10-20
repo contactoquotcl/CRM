@@ -8,7 +8,7 @@ export const LEAD_SELECT = `
          l.channel, l.state_id, l.state_date::text AS state_date, l.lead_date::text AS lead_date,
          l.quote_number, l.client_quote_number, l.invoice_number, l.products_text,
          l.subtotal, l.iva, l.total, l.requires_supplier_quote, l.comments,
-         l.created_by, l.created_at, l.updated_at,
+         l.created_by, l.created_at, l.updated_at, l.sort_order,
          s.name AS state_name, s.color AS state_color, u.name AS owner_name
   FROM leads l
   LEFT JOIN pipeline_states s ON s.id = l.state_id
@@ -40,12 +40,57 @@ leadsRouter.get('/', async (req, res) => {
     const p = `$${params.length}`;
     where.push(`(LOWER(l.client_name) LIKE ${p} OR LOWER(l.razon_social) LIKE ${p} OR LOWER(l.rut) LIKE ${p} OR LOWER(l.email) LIKE ${p} OR LOWER(l.contact) LIKE ${p} OR CAST(l.quote_number AS TEXT) LIKE ${p})`);
   }
-  if (req.query.state_id) {
-    params.push(Number(req.query.state_id));
-    where.push(`l.state_id = $${params.length}`);
+  // Estados: state_id=3 o state_ids=1,2,3
+  const ids = [req.query.state_id, ...String(req.query.state_ids || '').split(',')]
+    .filter((v) => v !== undefined && v !== '')
+    .map(Number)
+    .filter((n) => Number.isInteger(n) && n > 0);
+  if (ids.length) {
+    params.push(ids);
+    where.push(`l.state_id = ANY($${params.length}::int[])`);
   }
-  const { rows } = await query(`${LEAD_SELECT} ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY COALESCE(l.state_date, l.lead_date) DESC NULLS LAST, l.id DESC LIMIT 3000`, params);
+  // Fechas: date_field=state (fecha en que pasó a su estado actual, por defecto) | lead (fecha de creación del lead)
+  const dateExpr = req.query.date_field === 'lead' ? 'COALESCE(l.lead_date, l.created_at::date)' : 'COALESCE(l.state_date, l.lead_date)';
+  const from = req.query.from ? parseDate(req.query.from) : null;
+  const to = req.query.to ? parseDate(req.query.to) : null;
+  if (req.query.from && !from) throw new HttpError(400, 'Fecha "desde" inválida');
+  if (req.query.to && !to) throw new HttpError(400, 'Fecha "hasta" inválida');
+  if (from) { params.push(from); where.push(`${dateExpr} >= $${params.length}::date`); }
+  if (to) { params.push(to); where.push(`${dateExpr} <= $${params.length}::date`); }
+  const { rows } = await query(`${LEAD_SELECT} ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY l.sort_order ASC, l.id DESC LIMIT 3000`, params);
   res.json(rows);
+});
+
+// Mueve un lead a una etapa y lo ubica en un punto concreto: justo antes de `before_id`, justo después de
+// `after_id`, o al final de la etapa si no se indica ninguno. Reenumera la etapa completa.
+leadsRouter.put('/:id/move', async (req, res) => {
+  const id = Number(req.params.id);
+  const stateId = Number(req.body.state_id);
+  const beforeId = req.body.before_id ? Number(req.body.before_id) : null;
+  const afterId = req.body.after_id ? Number(req.body.after_id) : null;
+  await tx(async (t) => {
+    const cur = await t.query('SELECT state_id FROM leads WHERE id=$1', [id]);
+    if (!cur.rows[0]) throw new HttpError(404, 'Lead no encontrado');
+    const st = await t.query('SELECT id FROM pipeline_states WHERE id=$1', [stateId]);
+    if (!st.rows[0]) throw new HttpError(400, 'Estado inválido');
+
+    const { rows } = await t.query('SELECT id FROM leads WHERE state_id=$1 AND id<>$2 ORDER BY sort_order ASC, id DESC', [stateId, id]);
+    const order = rows.map((r) => r.id);
+    let idx = order.length;
+    if (beforeId && order.includes(beforeId)) idx = order.indexOf(beforeId);
+    else if (afterId && order.includes(afterId)) idx = order.indexOf(afterId) + 1;
+    order.splice(idx, 0, id);
+
+    if (cur.rows[0].state_id !== stateId) {
+      await t.query('UPDATE leads SET state_id=$1, state_date=$2, updated_at=now() WHERE id=$3', [stateId, today(), id]);
+    }
+    await t.query(
+      'UPDATE leads l SET sort_order = o.ord::int FROM unnest($1::int[]) WITH ORDINALITY AS o(id, ord) WHERE l.id = o.id',
+      [order]
+    );
+  });
+  const out = await query(`${LEAD_SELECT} WHERE l.id=$1`, [id]);
+  res.json(out.rows[0]);
 });
 
 leadsRouter.get('/:id', async (req, res) => {
@@ -79,7 +124,7 @@ leadsRouter.patch('/:id', async (req, res) => {
   const keys = Object.keys(l);
   if (!keys.length) throw new HttpError(400, 'Nada que actualizar');
   const extra = [];
-  if (l.state_id !== undefined && l.state_id !== cur.rows[0].state_id) extra.push(['state_date', today()]);
+  if (l.state_id !== undefined && l.state_id !== cur.rows[0].state_id) extra.push(['state_date', today()], ['sort_order', 0]); // al cambiar de etapa entra arriba
   const all = [...keys.map((k) => [k, l[k]]), ...extra];
   const sets = all.map(([k], i) => `${k}=$${i + 1}`).join(', ');
   await query(`UPDATE leads SET ${sets}, updated_at=now() WHERE id=$${all.length + 1}`, [...all.map(([, v]) => v), id]);

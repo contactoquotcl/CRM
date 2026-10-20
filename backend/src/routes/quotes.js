@@ -116,7 +116,7 @@ quotesRouter.post('/', async (req, res) => {
     if (leadId) {
       await t.query(
         `UPDATE leads SET client_name=$1, rut=$2, razon_social=$3, email=$4, contact=$5, phone=$6, quote_number=$7,
-           products_text=$8, subtotal=$9, iva=$10, total=$11, state_id=$12, state_date=$13, updated_at=now() WHERE id=$14`,
+           products_text=$8, subtotal=$9, iva=$10, total=$11, state_id=$12, state_date=$13, sort_order=0, updated_at=now() WHERE id=$14`,
         [client.razon_social, client.rut, client.razon_social, client.email, client.contact, client.phone, number, productsText, subtotal, iva, total, initialState, today(), leadId]
       );
     } else {
