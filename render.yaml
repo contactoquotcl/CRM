@@ -1,0 +1,30 @@
+# Blueprint de Render: API + Postgres. Ajusta los planes a tu gusto.
+databases:
+  - name: quot-crm-db
+    plan: basic-256mb        # el plan free de Render borra la base a los 30 días
+    databaseName: quot_crm
+
+services:
+  - type: web
+    name: quot-crm-api
+    runtime: node
+    rootDir: backend
+    plan: starter            # el plan free "duerme" la API tras 15 min sin uso
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: quot-crm-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ADMIN_EMAIL
+        sync: false          # te lo pide Render al crear el blueprint
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false          # URL del frontend en Vercel, ej. https://quot-crm.vercel.app
