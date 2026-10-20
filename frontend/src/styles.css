@@ -139,3 +139,10 @@ table.items td.num { padding-top: 14px; }
   .search { min-width: 0; flex: 1 1 100%; }
   .totals { width: 100%; }
 }
+
+.margin-box { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; background: #f8fafc; border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px 0; margin-bottom: 12px; }
+.margin-box .field { max-width: 320px; }
+.margin-box > .muted { padding-bottom: 14px; }
+.internal { margin-left: auto; width: 300px; margin-top: 14px; padding: 10px 12px; border: 1px dashed #f59e0b; background: #fffbeb; border-radius: 6px; font-size: 13px; }
+.internal div { display: flex; justify-content: space-between; padding: 2px 0; }
+@media (max-width: 760px) { .internal { width: 100%; } }

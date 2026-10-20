@@ -11,9 +11,9 @@ Mini CRM de Quot.cl: pipeline de cotizaciones, maestra de productos, cotizador c
 | Módulo | Qué hace |
 |---|---|
 | Pipeline | Tablero (arrastrar y soltar) y tabla; estados configurables por el admin |
-| Cotizador | Datos del cliente (RUT validado, razón social, correo, contacto, teléfono) + ítems desde la maestra o libres → PDF con **correlativo** → crea el lead en estado **Cotizado** |
+| Cotizador | **Trabaja con costos**: pide el margen y calcula el precio de venta = costo / (1 − margen) (margen por cotización, con ajuste opcional por ítem). Costo y margen son internos: **no salen en el PDF**. Datos del cliente (RUT validado, razón social, correo, contacto, teléfono) + ítems desde la maestra o libres → PDF con **correlativo** → crea el lead en estado **Cotizado** |
 | Cotizaciones | Listado y re-descarga de PDF |
-| Productos | Maestra con SKU, nombre, descripción y precio neto (CLP); import CSV por SKU |
+| Productos | Maestra con SKU, nombre, descripción y **costo** neto (CLP); import CSV por SKU |
 | Importar (admin) | CSV de Notion → mapeo de columnas → leads; reimportable sin duplicar |
 | Admin | Usuarios y roles, estados del pipeline, datos de empresa, IVA, próximo N° de cotización |
 
@@ -44,6 +44,6 @@ Notion → base **Cotizaciones Quot 2026** → `···` → Exportar → CSV. En
 
 ## Notas
 
-- Montos en CLP enteros, precios **netos**; IVA configurable (19 %).
+- Montos en CLP enteros, **netos**. La maestra guarda el costo; el precio de venta se calcula en cada cotización (margen sobre la venta, redondeado a peso). Cada cotización guarda el costo y el margen usados; IVA configurable (19 %).
 - El correlativo se incrementa de forma atómica en la base de datos (no hay saltos ni duplicados con usuarios simultáneos).
 - El PDF se genera al vuelo con PDFKit desde los datos guardados, así que siempre se puede volver a descargar.

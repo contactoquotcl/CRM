@@ -29,3 +29,11 @@ export const fmtDate = (iso) => {
   const [y, m, d] = String(iso).slice(0, 10).split('-');
   return `${d}-${m}-${y}`;
 };
+
+// Precio de venta neto = costo / (1 - margen), con margen en % sobre la venta. null si el margen no es válido.
+export function priceFromCost(cost, marginPct) {
+  const m = Number(marginPct);
+  if (marginPct === '' || marginPct === null || marginPct === undefined || !Number.isFinite(m) || m < 0 || m >= 100) return null;
+  return Math.round((Number(cost) || 0) / (1 - m / 100));
+}
+export const parseMargin = (v) => (String(v).trim() === '' ? NaN : Number(String(v).replace(',', '.')));

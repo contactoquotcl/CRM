@@ -20,7 +20,7 @@ function addDays(iso, days) {
 /** Devuelve un Buffer con el PDF de la cotización. */
 export function renderQuotePdf(quote, items, settings) {
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ size: 'A4', margin: 40, info: { Title: `Cotización N° ${quote.number}`, Author: settings.company_name } });
+    const doc = new PDFDocument({ size: 'A4', margin: 40, compress: process.env.PDF_NO_COMPRESS !== '1', info: { Title: `Cotización N° ${quote.number}`, Author: settings.company_name } });
     const chunks = [];
     doc.on('data', (c) => chunks.push(c));
     doc.on('end', () => resolve(Buffer.concat(chunks)));

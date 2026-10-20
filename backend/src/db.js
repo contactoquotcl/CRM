@@ -166,6 +166,14 @@ export async function initDb() {
 
   await impl.exec(SCHEMA);
 
+  // Migración: la maestra guarda COSTO (columna `price`); el precio de venta se calcula en cada cotización
+  // con el margen que indica el vendedor: precio = costo / (1 - margen). El costo y el margen son internos.
+  await impl.exec(`
+    ALTER TABLE quotes ADD COLUMN IF NOT EXISTS margin_pct DOUBLE PRECISION NOT NULL DEFAULT 0;
+    ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS cost INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS margin_pct DOUBLE PRECISION NOT NULL DEFAULT 0;
+  `);
+
   for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) {
     await impl.query('INSERT INTO settings(key,value) VALUES($1,$2) ON CONFLICT (key) DO NOTHING', [k, v]);
   }

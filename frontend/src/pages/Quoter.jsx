@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { Alert, Field } from '../ui.jsx';
-import { clp, formatRut, validRut } from '../util.js';
+import { clp, formatRut, parseMargin, priceFromCost, validRut } from '../util.js';
 
 const emptyClient = { rut: '', razon_social: '', email: '', contact: '', phone: '' };
 
@@ -12,6 +12,7 @@ export default function Quoter() {
   const [client, setClient] = useState(emptyClient);
   const [items, setItems] = useState([]);
   const [notes, setNotes] = useState('');
+  const [margin, setMargin] = useState(''); // margen global (%) que define quien cotiza
   const [validity, setValidity] = useState(15);
   const [settings, setSettings] = useState({ iva_rate: '19' });
   const [products, setProducts] = useState([]);
@@ -48,15 +49,28 @@ export default function Quoter() {
   }, [products, search]);
 
   const rate = Number(settings.iva_rate) || 19;
-  const subtotal = items.reduce((a, it) => a + (Number(it.qty) || 0) * (Number(it.unit_price) || 0), 0);
+  const globalMargin = parseMargin(margin);
+  const marginOk = Number.isFinite(globalMargin) && globalMargin >= 0 && globalMargin < 100;
+  // margen efectivo por ítem: el propio si lo tiene, si no el global
+  const calc = items.map((it) => {
+    const m = String(it.margin).trim() === '' ? globalMargin : parseMargin(it.margin);
+    const unit = priceFromCost(it.cost, m);
+    const qty = Number(it.qty) || 0;
+    return { unit, line: unit === null ? 0 : unit * qty, costLine: (Number(it.cost) || 0) * qty };
+  });
+  const anyInvalid = items.length > 0 && calc.some((c) => c.unit === null);
+  const subtotal = calc.reduce((a, c) => a + c.line, 0);
+  const costTotal = calc.reduce((a, c) => a + c.costLine, 0);
   const iva = Math.round((subtotal * rate) / 100);
   const total = subtotal + iva;
+  const profit = subtotal - costTotal;
+  const realMargin = subtotal > 0 ? (profit / subtotal) * 100 : 0;
 
   const setC = (k) => (e) => setClient({ ...client, [k]: e.target.value });
   const setItem = (i, k, v) => setItems(items.map((it, j) => (j === i ? { ...it, [k]: v } : it)));
 
   const addProduct = (p) => {
-    setItems([...items, { product_id: p.id, sku: p.sku, description: p.description ? `${p.name} — ${p.description}` : p.name, qty: 1, unit_price: p.price }]);
+    setItems([...items, { product_id: p.id, sku: p.sku, description: p.description ? `${p.name} — ${p.description}` : p.name, qty: 1, cost: p.price, margin: '' }]);
     setSearch('');
     setShowList(false);
   };
@@ -79,9 +93,18 @@ export default function Quoter() {
   const submit = async () => {
     setError('');
     if (!validRut(client.rut)) return setError('RUT inválido: revisa el dígito verificador.');
+    if (!marginOk) return setError('Indica el margen de la cotización (entre 0 y 99,99 %).');
+    if (anyInvalid) return setError('Hay ítems con un margen inválido (debe estar entre 0 y 99,99 %).');
     setBusy(true);
     try {
-      const r = await api.post('/api/quotes', { client, items, notes, validity_days: validity, lead_id: leadId ? Number(leadId) : undefined });
+      const r = await api.post('/api/quotes', {
+        client,
+        margin: globalMargin,
+        items: items.map((it) => ({ product_id: it.product_id, sku: it.sku, description: it.description, qty: it.qty, cost: it.cost, margin: String(it.margin).trim() === '' ? undefined : parseMargin(it.margin) })),
+        notes,
+        validity_days: validity,
+        lead_id: leadId ? Number(leadId) : undefined,
+      });
       setDone(r);
       api.openPdf(r.id).catch(() => {});
     } catch (e) {
@@ -91,7 +114,7 @@ export default function Quoter() {
     }
   };
 
-  const reset = () => { setDone(null); setClient(emptyClient); setItems([]); setNotes(''); setPrefillNote(''); };
+  const reset = () => { setDone(null); setClient(emptyClient); setItems([]); setNotes(''); setMargin(''); setPrefillNote(''); };
 
   if (done) {
     return (
@@ -128,7 +151,13 @@ export default function Quoter() {
       <div className="panel">
         <div className="row between">
           <h3>Ítems</h3>
-          <button className="btn small" onClick={() => setItems([...items, { product_id: null, sku: '', description: '', qty: 1, unit_price: 0 }])}>+ Ítem libre</button>
+          <button className="btn small" onClick={() => setItems([...items, { product_id: null, sku: '', description: '', qty: 1, cost: 0, margin: '' }])}>+ Ítem libre</button>
+        </div>
+        <div className="margin-box">
+          <Field label="Margen de esta cotización (%) *" hint="Precio de venta = costo / (1 − margen). No aparece en el PDF.">
+            <input type="number" step="0.1" min="0" max="99.99" placeholder="Ej. 20" value={margin} onChange={(e) => setMargin(e.target.value)} />
+          </Field>
+          {marginOk && <span className="muted small">Ej.: costo $1.000 → venta {clp(priceFromCost(1000, globalMargin))}</span>}
         </div>
         <div className="combo" ref={boxRef}>
           <input
@@ -153,15 +182,17 @@ export default function Quoter() {
         {items.length > 0 && (
           <div className="table-wrap">
             <table className="items">
-              <thead><tr><th style={{ width: 120 }}>SKU</th><th>Descripción</th><th style={{ width: 80 }}>Cant.</th><th style={{ width: 130 }}>P. unit. neto</th><th className="num" style={{ width: 120 }}>Total neto</th><th style={{ width: 36 }} /></tr></thead>
+              <thead><tr><th style={{ width: 110 }}>SKU</th><th>Descripción</th><th style={{ width: 70 }}>Cant.</th><th style={{ width: 120 }}>Costo unit.</th><th style={{ width: 90 }}>Margen %</th><th className="num" style={{ width: 120 }}>P. venta unit.</th><th className="num" style={{ width: 120 }}>Total neto</th><th style={{ width: 36 }} /></tr></thead>
               <tbody>
                 {items.map((it, i) => (
                   <tr key={i}>
                     <td><input value={it.sku} onChange={(e) => setItem(i, 'sku', e.target.value)} /></td>
                     <td><textarea rows={2} value={it.description} onChange={(e) => setItem(i, 'description', e.target.value)} /></td>
                     <td><input type="number" min="1" value={it.qty} onChange={(e) => setItem(i, 'qty', e.target.value)} /></td>
-                    <td><input type="number" min="0" value={it.unit_price} onChange={(e) => setItem(i, 'unit_price', e.target.value)} /></td>
-                    <td className="num">{clp((Number(it.qty) || 0) * (Number(it.unit_price) || 0))}</td>
+                    <td><input type="number" min="0" value={it.cost} onChange={(e) => setItem(i, 'cost', e.target.value)} /></td>
+                    <td><input type="number" step="0.1" min="0" max="99.99" placeholder={marginOk ? String(globalMargin) : '—'} value={it.margin} onChange={(e) => setItem(i, 'margin', e.target.value)} title="Vacío = usa el margen de la cotización" /></td>
+                    <td className="num">{calc[i].unit === null ? <span className="err">margen inválido</span> : clp(calc[i].unit)}</td>
+                    <td className="num">{calc[i].unit === null ? '—' : clp(calc[i].line)}</td>
                     <td><button className="icon-btn" onClick={() => setItems(items.filter((_, j) => j !== i))} aria-label="Quitar">×</button></td>
                   </tr>
                 ))}
@@ -176,6 +207,14 @@ export default function Quoter() {
           <div><span>IVA ({rate}%)</span><span>{clp(iva)}</span></div>
           <div className="grand"><span>Total</span><span>{clp(total)}</span></div>
         </div>
+        {items.length > 0 && !anyInvalid && (
+          <div className="internal">
+            <strong>Solo interno (no sale en el PDF)</strong>
+            <div><span>Costo total</span><span>{clp(costTotal)}</span></div>
+            <div><span>Utilidad neta</span><span>{clp(profit)}</span></div>
+            <div><span>Margen real sobre la venta</span><span>{realMargin.toFixed(1).replace('.', ',')} %</span></div>
+          </div>
+        )}
       </div>
 
       <div className="panel">
@@ -186,7 +225,7 @@ export default function Quoter() {
       </div>
 
       <div className="row" style={{ justifyContent: 'flex-end' }}>
-        <button className="btn primary big" disabled={busy || !items.length} onClick={submit}>{busy ? 'Generando…' : 'Generar cotización y registrar lead'}</button>
+        <button className="btn primary big" disabled={busy || !items.length || !marginOk || anyInvalid} onClick={submit}>{busy ? 'Generando…' : 'Generar cotización y registrar lead'}</button>
       </div>
     </div>
   );

@@ -73,6 +73,14 @@ export function parseDate(v) {
   return null;
 }
 
+// Precio de venta neto a partir del costo y el margen sobre la venta (en %): costo / (1 - margen).
+// Ej.: costo 800 y margen 20 % → 1.000. El margen debe estar en [0, 100).
+export function priceFromCost(cost, marginPct) {
+  return Math.round(cost / (1 - marginPct / 100));
+}
+
+export const validMargin = (m) => typeof m === 'number' && Number.isFinite(m) && m >= 0 && m < 100;
+
 export const today = () => {
   const d = new Date();
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;

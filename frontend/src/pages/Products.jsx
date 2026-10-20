@@ -9,7 +9,7 @@ const PRODUCT_FIELDS = [
   { key: 'sku', label: 'Código SKU', required: true, aliases: ['sku', 'codigo', 'code', 'part number', 'pn'] },
   { key: 'name', label: 'Nombre', required: true, aliases: ['nombre', 'producto', 'name', 'titulo'] },
   { key: 'description', label: 'Descripción', aliases: ['descripcion', 'description', 'detalle'] },
-  { key: 'price', label: 'Precio neto (CLP)', aliases: ['precio', 'price', 'precio neto', 'valor'] },
+  { key: 'price', label: 'Costo neto (CLP)', aliases: ['costo', 'costo neto', 'precio costo', 'precio', 'price', 'precio neto', 'valor'] },
 ];
 
 export default function Products() {
@@ -50,7 +50,7 @@ export default function Products() {
       {!isAdmin && <p className="muted small">Solo los administradores pueden modificar la maestra de productos.</p>}
       <div className="table-wrap">
         <table>
-          <thead><tr><th>SKU</th><th>Nombre</th><th>Descripción</th><th className="num">Precio neto</th><th>Estado</th></tr></thead>
+          <thead><tr><th>SKU</th><th>Nombre</th><th>Descripción</th><th className="num">Costo neto</th><th>Estado</th></tr></thead>
           <tbody>
             {items.map((p) => (
               <tr key={p.id} className={isAdmin ? 'clickable' : ''} onClick={() => isAdmin && setEdit(p)}>
@@ -140,7 +140,7 @@ function ProductModal({ product, onClose, onSaved }) {
       <Alert>{error}</Alert>
       <div className="grid2">
         <Field label="Código SKU"><input value={f.sku} onChange={set('sku')} /></Field>
-        <Field label="Precio neto (CLP)"><input type="number" min="0" value={f.price} onChange={set('price')} /></Field>
+        <Field label="Costo neto (CLP)" hint="El precio de venta se calcula en el cotizador con el margen"><input type="number" min="0" value={f.price} onChange={set('price')} /></Field>
       </div>
       <Field label="Nombre"><input value={f.name} onChange={set('name')} /></Field>
       <Field label="Descripción"><textarea rows={3} value={f.description} onChange={set('description')} /></Field>

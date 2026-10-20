@@ -1,14 +1,14 @@
 import { Router } from 'express';
 import { query, tx, getSettings } from '../db.js';
 import { authenticate } from '../auth.js';
-import { HttpError, formatRut, parseMoney, validRut, today, clp } from '../util.js';
+import { HttpError, formatRut, parseMoney, validRut, today, clp, priceFromCost, validMargin } from '../util.js';
 import { renderQuotePdf } from '../pdf.js';
 
 export const quotesRouter = Router();
 quotesRouter.use(authenticate);
 
 const QUOTE_SELECT = `SELECT id, number, lead_id, quote_date::text AS quote_date, validity_days, rut, razon_social, email, contact, phone,
-  notes, iva_rate, subtotal, iva, total, created_by, created_at FROM quotes`;
+  notes, iva_rate, margin_pct, subtotal, iva, total, created_by, created_at FROM quotes`;
 
 quotesRouter.get('/', async (req, res) => {
   const q = String(req.query.q || '').trim().toLowerCase();
@@ -26,7 +26,7 @@ quotesRouter.get('/:id', async (req, res) => {
   const id = Number(req.params.id);
   const { rows } = await query(`${QUOTE_SELECT} WHERE id=$1`, [id]);
   if (!rows[0]) throw new HttpError(404, 'Cotización no encontrada');
-  const items = await query('SELECT id, position, product_id, sku, description, qty, unit_price, line_total FROM quote_items WHERE quote_id=$1 ORDER BY position', [id]);
+  const items = await query('SELECT id, position, product_id, sku, description, qty, cost, margin_pct, unit_price, line_total FROM quote_items WHERE quote_id=$1 ORDER BY position', [id]);
   res.json({ ...rows[0], items: items.rows });
 });
 
@@ -35,7 +35,9 @@ quotesRouter.get('/:id/pdf', async (req, res) => {
   const { rows } = await query(`${QUOTE_SELECT} WHERE id=$1`, [id]);
   if (!rows[0]) throw new HttpError(404, 'Cotización no encontrada');
   const items = await query('SELECT sku, description, qty, unit_price, line_total FROM quote_items WHERE quote_id=$1 ORDER BY position', [id]);
-  const pdf = await renderQuotePdf(rows[0], items.rows, await getSettings());
+  // El PDF es para el cliente: solo recibe datos de venta (nunca costo ni margen).
+  const { margin_pct: _internal, ...publicQuote } = rows[0];
+  const pdf = await renderQuotePdf(publicQuote, items.rows, await getSettings());
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `inline; filename="Cotizacion-${rows[0].number}.pdf"`);
   res.send(pdf);
@@ -43,8 +45,10 @@ quotesRouter.get('/:id/pdf', async (req, res) => {
 
 /**
  * Crea la cotización con el siguiente correlativo y registra el lead en estado inicial ("Cotizado").
- * Body: { client:{rut,razon_social,email,contact,phone}, items:[{product_id?,sku,description,qty,unit_price}],
+ * Body: { client:{rut,razon_social,email,contact,phone}, margin (% sobre la venta, obligatorio),
+ *         items:[{product_id?,sku,description,qty,cost,margin? (override por ítem)}],
  *         validity_days?, notes?, lead_id? (re-cotizar un lead existente) }
+ * Precio de venta unitario = costo / (1 - margen). Costo y margen son internos: no salen en el PDF.
  */
 quotesRouter.post('/', async (req, res) => {
   const b = req.body || {};
@@ -63,27 +67,27 @@ quotesRouter.post('/', async (req, res) => {
   if (!client.contact) throw new HttpError(400, 'El contacto es obligatorio');
   if (!client.phone) throw new HttpError(400, 'El teléfono es obligatorio');
 
+  const globalMargin = typeof b.margin === 'string' && b.margin.trim() !== '' ? Number(b.margin.replace(',', '.')) : b.margin;
+  if (!validMargin(globalMargin)) throw new HttpError(400, 'Indica el margen de la cotización (un número entre 0 y 99,99 %)');
+
   const rawItems = Array.isArray(b.items) ? b.items : [];
   const items = rawItems
     .map((it, i) => {
       const qty = parseInt(it.qty, 10);
-      const unit = parseMoney(it.unit_price);
-      return {
-        position: i,
-        product_id: it.product_id ? Number(it.product_id) : null,
-        sku: String(it.sku || '').trim(),
-        description: String(it.description || '').trim(),
-        qty,
-        unit_price: unit,
-        line_total: qty * unit,
-      };
+      const cost = parseMoney(it.cost);
+      const hasOwn = it.margin !== undefined && it.margin !== null && String(it.margin).trim() !== '';
+      const margin = hasOwn ? Number(String(it.margin).replace(',', '.')) : globalMargin;
+      return { position: i, product_id: it.product_id ? Number(it.product_id) : null, sku: String(it.sku || '').trim(), description: String(it.description || '').trim(), qty, cost, margin };
     })
     .filter((it) => it.description || it.sku);
   if (!items.length) throw new HttpError(400, 'Agrega al menos un ítem');
   for (const it of items) {
     if (!it.description) throw new HttpError(400, `El ítem ${it.sku} necesita descripción`);
     if (!Number.isInteger(it.qty) || it.qty < 1) throw new HttpError(400, `Cantidad inválida en "${it.description}"`);
-    if (it.unit_price < 0) throw new HttpError(400, `Precio inválido en "${it.description}"`);
+    if (it.cost < 0) throw new HttpError(400, `Costo inválido en "${it.description}"`);
+    if (!validMargin(it.margin)) throw new HttpError(400, `Margen inválido en "${it.description}" (debe estar entre 0 y 99,99 %)`);
+    it.unit_price = priceFromCost(it.cost, it.margin);
+    it.line_total = it.qty * it.unit_price;
   }
 
   const created = await tx(async (t) => {
@@ -126,14 +130,14 @@ quotesRouter.post('/', async (req, res) => {
     }
 
     const q = await t.query(
-      `INSERT INTO quotes(number, lead_id, quote_date, validity_days, rut, razon_social, email, contact, phone, notes, iva_rate, subtotal, iva, total, created_by)
-       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id`,
-      [number, leadId, today(), validity, client.rut, client.razon_social, client.email, client.contact, client.phone, String(b.notes || '').trim(), rate, subtotal, iva, total, req.user.id]
+      `INSERT INTO quotes(number, lead_id, quote_date, validity_days, rut, razon_social, email, contact, phone, notes, iva_rate, margin_pct, subtotal, iva, total, created_by)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING id`,
+      [number, leadId, today(), validity, client.rut, client.razon_social, client.email, client.contact, client.phone, String(b.notes || '').trim(), rate, globalMargin, subtotal, iva, total, req.user.id]
     );
     for (const it of items) {
       await t.query(
-        'INSERT INTO quote_items(quote_id, position, product_id, sku, description, qty, unit_price, line_total) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',
-        [q.rows[0].id, it.position, it.product_id, it.sku, it.description, it.qty, it.unit_price, it.line_total]
+        'INSERT INTO quote_items(quote_id, position, product_id, sku, description, qty, cost, margin_pct, unit_price, line_total) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
+        [q.rows[0].id, it.position, it.product_id, it.sku, it.description, it.qty, it.cost, it.margin, it.unit_price, it.line_total]
       );
     }
     return { id: q.rows[0].id, number, lead_id: leadId, subtotal, iva, total };

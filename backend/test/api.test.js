@@ -2,13 +2,14 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 
 process.env.PGLITE_DIR = 'memory://';
+process.env.PDF_NO_COMPRESS = '1';
 process.env.ADMIN_EMAIL = 'admin@test.cl';
 process.env.ADMIN_PASSWORD = 'admin-pass-123';
 
 const { initDb } = await import('../src/db.js');
 const { seedAdmin } = await import('../src/auth.js');
 const { createApp } = await import('../src/app.js');
-const { validRut, parseDate, parseMoney, formatRut } = await import('../src/util.js');
+const { validRut, parseDate, parseMoney, formatRut, priceFromCost, validMargin } = await import('../src/util.js');
 
 let server, base, adminToken, userToken;
 
@@ -42,6 +43,16 @@ test('utilidades: RUT, fechas, montos', () => {
   assert.equal(parseMoney('1.725.488'), 1725488);
   assert.equal(parseMoney('$1,449,989.92'), 1449990);
   assert.equal(parseMoney(275498.08), 275498);
+  // precio = costo / (1 - margen)
+  assert.equal(priceFromCost(800, 20), 1000);
+  assert.equal(priceFromCost(1000, 0), 1000);
+  assert.equal(priceFromCost(750, 25), 1000);
+  assert.equal(priceFromCost(100000, 15), 117647); // 117.647,06 → redondeo CLP
+  assert.equal(validMargin(0), true);
+  assert.equal(validMargin(99.5), true);
+  assert.equal(validMargin(100), false);
+  assert.equal(validMargin(-1), false);
+  assert.equal(validMargin(NaN), false);
 });
 
 test('login, roles y usuarios', async () => {
@@ -83,28 +94,43 @@ test('estados del pipeline configurables', async () => {
   assert.equal((await api('DELETE', `/api/states/${s.data[0].id}`, { token: adminToken })).status, 400); // inicial
 });
 
-test('cotizador: correlativo, lead "Cotizado" y PDF', async () => {
+test('cotizador: costo + margen, correlativo, lead "Cotizado" y PDF sin costo/margen', async () => {
   const body = {
     client: { rut: '76.086.428-5', razon_social: 'Cliente Demo SpA', email: 'compras@demo.cl', contact: 'Ana Pérez', phone: '+56 9 1234 5678' },
-    items: [{ sku: 'ZD421-203', description: 'Impresora Zebra ZD421', qty: 2, unit_price: 299990 }, { sku: 'ETQ-100', description: 'Etiqueta 100x150', qty: 10, unit_price: 12000 }],
+    margin: 20,
+    items: [
+      { sku: 'ZD421-203', description: 'Impresora Zebra ZD421', qty: 2, cost: 240000 }, // 240000/0,8 = 300000
+      { sku: 'ETQ-100', description: 'Etiqueta 100x150', qty: 10, cost: 9000, margin: 10 }, // 9000/0,9 = 10000 (override)
+    ],
     notes: 'Entrega en 5 días hábiles',
   };
-  const bad = await api('POST', '/api/quotes', { token: userToken, body: { ...body, client: { ...body.client, rut: '76.086.428-4' } } });
-  assert.equal(bad.status, 400);
+  assert.equal((await api('POST', '/api/quotes', { token: userToken, body: { ...body, client: { ...body.client, rut: '76.086.428-4' } } })).status, 400);
+  // el margen es obligatorio y debe ser válido
+  const { margin: _m, ...sinMargen } = body;
+  assert.equal((await api('POST', '/api/quotes', { token: userToken, body: sinMargen })).status, 400);
+  assert.equal((await api('POST', '/api/quotes', { token: userToken, body: { ...body, margin: 100 } })).status, 400);
+  assert.equal((await api('POST', '/api/quotes', { token: userToken, body: { ...body, margin: -5 } })).status, 400);
+  assert.equal((await api('POST', '/api/quotes', { token: userToken, body: { ...body, items: [{ ...body.items[0], margin: 100 }] } })).status, 400);
 
   const q1 = await api('POST', '/api/quotes', { token: userToken, body });
   assert.equal(q1.status, 201);
   assert.equal(q1.data.number, 1);
-  assert.equal(q1.data.subtotal, 719980);
-  assert.equal(q1.data.iva, 136796);
-  assert.equal(q1.data.total, 856776);
+  assert.equal(q1.data.subtotal, 700000); // 2×300000 + 10×10000
+  assert.equal(q1.data.iva, 133000);
+  assert.equal(q1.data.total, 833000);
   const q2 = await api('POST', '/api/quotes', { token: userToken, body });
   assert.equal(q2.data.number, 2);
+
+  // el detalle interno conserva costo y margen
+  const det = await api('GET', `/api/quotes/${q1.data.id}`, { token: userToken });
+  assert.equal(det.data.margin_pct, 20);
+  assert.deepEqual(det.data.items.map((i) => [i.cost, i.margin_pct, i.unit_price, i.line_total]), [[240000, 20, 300000, 600000], [9000, 10, 10000, 100000]]);
 
   const lead = await api('GET', `/api/leads/${q1.data.lead_id}`, { token: userToken });
   assert.equal(lead.data.state_name, 'Cotizado');
   assert.equal(lead.data.rut, '76086428-5');
   assert.equal(lead.data.razon_social, 'Cliente Demo SpA');
+  assert.equal(lead.data.total, 833000);
   assert.equal(lead.data.quotes.length, 1);
 
   // re-cotizar un lead existente no crea otro lead
@@ -115,7 +141,16 @@ test('cotizador: correlativo, lead "Cotizado" y PDF', async () => {
   const pdf = await api('GET', `/api/quotes/${q1.data.id}/pdf`, { token: userToken });
   assert.equal(pdf.status, 200);
   assert.equal(pdf.data.subarray(0, 4).toString(), '%PDF');
-  assert.ok(pdf.data.length > 2000);
+
+  // Texto visible del PDF (pdfkit escribe el texto como cadenas hex en operadores TJ)
+  const raw = pdf.data.toString('latin1');
+  const text = [...raw.matchAll(/<([0-9a-fA-F]+)>/g)].map((m) => Buffer.from(m[1], 'hex').toString('latin1')).join(' ').replace(/\s+/g, ''); // sin espacios: el kerning separa letras
+  assert.match(text, /ImpresoraZebraZD421/);
+  assert.match(text, /\$300\.000/); // precio de venta sí aparece
+  assert.match(text, /\$833\.000/);
+  assert.doesNotMatch(text, /240\.000/); // el costo no
+  assert.doesNotMatch(text, /9\.000/);
+  assert.doesNotMatch(text, /margen|costo/i);
 });
 
 test('importación de pipeline desde Notion (CSV mapeado)', async () => {
@@ -143,7 +178,7 @@ test('importación de pipeline desde Notion (CSV mapeado)', async () => {
   assert.equal((await api('POST', '/api/import/leads', { token: userToken, body: { rows } })).status, 403);
 
   // el siguiente correlativo del cotizador continúa desde lo importado
-  const body = { client: { rut: '76.086.428-5', razon_social: 'X SpA', email: 'x@x.cl', contact: 'X', phone: '1' }, items: [{ description: 'Algo', qty: 1, unit_price: 1000 }] };
+  const body = { client: { rut: '76.086.428-5', razon_social: 'X SpA', email: 'x@x.cl', contact: 'X', phone: '1' }, margin: 25, items: [{ description: 'Algo', qty: 1, cost: 750 }] };
   const q = await api('POST', '/api/quotes', { token: userToken, body });
   assert.equal(q.data.number, 481);
 });
