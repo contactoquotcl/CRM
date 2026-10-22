@@ -151,6 +151,11 @@ test('cotizador: costo + margen, correlativo, lead "Cotizado" y PDF sin costo/ma
   assert.doesNotMatch(text, /240\.000/); // el costo no
   assert.doesNotMatch(text, /9\.000/);
   assert.doesNotMatch(text, /margen|costo/i);
+  assert.match(text, /DATOSPARATRANSFERENCIA/);
+  assert.match(text, /77372977-8/);
+  assert.match(text, /1035865570/);
+  assert.match(text, /MercadoPago/);
+  assert.match(text, /contacto@quot\.cl/);
 });
 
 test('importación de pipeline desde Notion (CSV mapeado)', async () => {

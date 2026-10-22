@@ -208,6 +208,15 @@ function Settings() {
         <Field label="Validez por defecto (días)"><input type="number" value={s.quote_validity_days} onChange={set('quote_validity_days')} /></Field>
         <Field label="Próximo N° de cotización" hint="Correlativo: la siguiente cotización usará este número"><input type="number" min="1" value={s.quote_next_number} onChange={set('quote_next_number')} /></Field>
       </div>
+      <h3 style={{ marginTop: 8 }}>Datos para transferencia (aparecen en el PDF)</h3>
+      <div className="grid3">
+        <Field label="Nombre / titular"><input value={s.bank_holder || ''} onChange={set('bank_holder')} /></Field>
+        <Field label="RUT"><input value={s.bank_rut || ''} onChange={set('bank_rut')} /></Field>
+        <Field label="Banco"><input value={s.bank_name || ''} onChange={set('bank_name')} /></Field>
+        <Field label="Tipo de cuenta"><input value={s.bank_account_type || ''} onChange={set('bank_account_type')} /></Field>
+        <Field label="N° de cuenta"><input value={s.bank_account_number || ''} onChange={set('bank_account_number')} /></Field>
+        <Field label="Correo"><input value={s.bank_email || ''} onChange={set('bank_email')} /></Field>
+      </div>
       <Field label="Condiciones comerciales (pie del PDF)"><textarea rows={5} value={s.quote_terms} onChange={set('quote_terms')} /></Field>
       <div><button className="btn primary" onClick={save}>Guardar configuración</button></div>
     </div>

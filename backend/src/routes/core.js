@@ -83,7 +83,7 @@ settingsRouter.use(authenticate);
 
 settingsRouter.get('/', async (_req, res) => res.json(await getSettings()));
 
-const EDITABLE = ['company_name', 'company_rut', 'company_address', 'company_email', 'company_phone', 'company_web', 'iva_rate', 'quote_next_number', 'quote_validity_days', 'quote_terms'];
+const EDITABLE = ['company_name', 'company_rut', 'company_address', 'company_email', 'company_phone', 'company_web', 'iva_rate', 'quote_next_number', 'quote_validity_days', 'quote_terms', 'bank_holder', 'bank_rut', 'bank_name', 'bank_account_type', 'bank_account_number', 'bank_email'];
 settingsRouter.put('/', requireAdmin, async (req, res) => {
   const body = req.body || {};
   if (body.quote_next_number !== undefined) {

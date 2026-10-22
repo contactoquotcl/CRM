@@ -123,6 +123,24 @@ export function renderQuotePdf(quote, items, settings) {
       y += h + 4;
     };
     block('OBSERVACIONES', quote.notes);
+    const bank = [
+      settings.bank_holder && `Nombre: ${settings.bank_holder}`,
+      settings.bank_rut && `RUT: ${settings.bank_rut}`,
+      settings.bank_name && `Banco: ${settings.bank_name}`,
+      (settings.bank_account_type || settings.bank_account_number) && `${settings.bank_account_type || 'Cuenta'}: ${settings.bank_account_number || ''}`.trim(),
+      settings.bank_email && `Correo: ${settings.bank_email}`,
+    ].filter(Boolean);
+    if (bank.length) {
+      const bh = bank.length * 13 + 30;
+      if (y + bh > doc.page.height - 50) {
+        doc.addPage();
+        y = 40;
+      }
+      doc.roundedRect(L, y, W, bh, 4).fillAndStroke('#f8fafc', LINE);
+      doc.fillColor(MUTED).font('Helvetica-Bold').fontSize(8).text('DATOS PARA TRANSFERENCIA', L + 12, y + 10);
+      doc.fillColor(INK).font('Helvetica').fontSize(9.5).text(bank.join('\n'), L + 12, y + 24, { width: W - 24, lineGap: 2 });
+      y += bh + 10;
+    }
     block('CONDICIONES COMERCIALES', settings.quote_terms);
 
     doc.end();

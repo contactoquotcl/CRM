@@ -108,6 +108,12 @@ const DEFAULT_SETTINGS = {
   company_phone: '',
   company_web: 'www.quot.cl',
   iva_rate: '19',
+  bank_holder: 'Quot Marketplace Logístico SPA',
+  bank_rut: '77372977-8',
+  bank_name: 'Mercado Pago',
+  bank_account_type: 'Cuenta Vista',
+  bank_account_number: '1035865570',
+  bank_email: 'contacto@quot.cl',
   quote_next_number: '1',
   quote_validity_days: '15',
   quote_terms:
