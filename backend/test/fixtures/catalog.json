@@ -1,0 +1,432 @@
+[
+ {
+  "id": 101,
+  "sku": "ZD421-203",
+  "name": "Impresora Zebra ZD421 térmica directa 203 dpi",
+  "status": "publish",
+  "type": "simple",
+  "price": "389990",
+  "regular_price": "389990",
+  "stock_status": "instock",
+  "stock_quantity": 12,
+  "permalink": "https://quot.cl/producto/zd421-203/",
+  "images": [
+   {
+    "src": "https://quot.cl/img/zd421-203.jpg"
+   }
+  ],
+  "categories": [
+   {
+    "name": "Impresoras"
+   },
+   {
+    "name": "Zebra"
+   }
+  ],
+  "attributes": [
+   {
+    "name": "Resolución",
+    "options": [
+     "203 dpi"
+    ]
+   },
+   {
+    "name": "Ancho de impresión",
+    "options": [
+     "4 pulgadas"
+    ]
+   }
+  ],
+  "short_description": "<p>Impresora de escritorio Zebra ZD421 para etiquetas de hasta 4 pulgadas, térmica directa, USB y Ethernet</p>",
+  "description": "<p>Impresora de escritorio Zebra ZD421 para etiquetas de hasta 4 pulgadas, térmica directa, USB y Ethernet. Producto de catálogo de prueba.</p>"
+ },
+ {
+  "id": 102,
+  "sku": "ZD421-TT",
+  "name": "Impresora Zebra ZD421 transferencia térmica 300 dpi",
+  "status": "publish",
+  "type": "simple",
+  "price": "459990",
+  "regular_price": "459990",
+  "stock_status": "instock",
+  "stock_quantity": 5,
+  "permalink": "https://quot.cl/producto/zd421-tt/",
+  "images": [
+   {
+    "src": "https://quot.cl/img/zd421-tt.jpg"
+   }
+  ],
+  "categories": [
+   {
+    "name": "Impresoras"
+   },
+   {
+    "name": "Zebra"
+   }
+  ],
+  "attributes": [
+   {
+    "name": "Resolución",
+    "options": [
+     "300 dpi"
+    ]
+   }
+  ],
+  "short_description": "<p>Impresora Zebra ZD421 con transferencia térmica y 300 dpi</p>",
+  "description": "<p>Impresora Zebra ZD421 con transferencia térmica y 300 dpi. Producto de catálogo de prueba.</p>"
+ },
+ {
+  "id": 103,
+  "sku": "ZT231",
+  "name": "Impresora industrial Zebra ZT231 203 dpi",
+  "status": "publish",
+  "type": "simple",
+  "price": "1290000",
+  "regular_price": "1290000",
+  "stock_status": "onbackorder",
+  "stock_quantity": null,
+  "permalink": "https://quot.cl/producto/zt231/",
+  "images": [
+   {
+    "src": "https://quot.cl/img/zt231.jpg"
+   }
+  ],
+  "categories": [
+   {
+    "name": "Impresoras"
+   },
+   {
+    "name": "Zebra"
+   }
+  ],
+  "attributes": [
+   {
+    "name": "Resolución",
+    "options": [
+     "203 dpi"
+    ]
+   }
+  ],
+  "short_description": "<p>Impresora industrial de alto volumen Zebra ZT231</p>",
+  "description": "<p>Impresora industrial de alto volumen Zebra ZT231. Producto de catálogo de prueba.</p>"
+ },
+ {
+  "id": 104,
+  "sku": "ETQ-100X150-TD",
+  "name": "Etiquetas térmicas directas 100x150 mm rollo 350 unidades",
+  "status": "publish",
+  "type": "simple",
+  "price": "5490",
+  "regular_price": "5490",
+  "stock_status": "instock",
+  "stock_quantity": 400,
+  "permalink": "https://quot.cl/producto/etq-100x150-td/",
+  "images": [
+   {
+    "src": "https://quot.cl/img/etq-100x150-td.jpg"
+   }
+  ],
+  "categories": [
+   {
+    "name": "Etiquetas"
+   }
+  ],
+  "attributes": [
+   {
+    "name": "Medida",
+    "options": [
+     "100x150 mm"
+    ]
+   },
+   {
+    "name": "Tipo",
+    "options": [
+     "Térmica directa"
+    ]
+   }
+  ],
+  "short_description": "<p>Etiquetas adhesivas térmicas directas de 100x150 mm, rollo de 350 etiquetas, core 25 mm</p>",
+  "description": "<p>Etiquetas adhesivas térmicas directas de 100x150 mm, rollo de 350 etiquetas, core 25 mm. Producto de catálogo de prueba.</p>"
+ },
+ {
+  "id": 105,
+  "sku": "ETQ-100X50-TT",
+  "name": "Etiquetas transferencia térmica 100x50 mm rollo 1000 unidades",
+  "status": "publish",
+  "type": "simple",
+  "price": "7990",
+  "regular_price": "7990",
+  "stock_status": "instock",
+  "stock_quantity": 250,
+  "permalink": "https://quot.cl/producto/etq-100x50-tt/",
+  "images": [
+   {
+    "src": "https://quot.cl/img/etq-100x50-tt.jpg"
+   }
+  ],
+  "categories": [
+   {
+    "name": "Etiquetas"
+   }
+  ],
+  "attributes": [
+   {
+    "name": "Medida",
+    "options": [
+     "100x50 mm"
+    ]
+   },
+   {
+    "name": "Tipo",
+    "options": [
+     "Transferencia térmica"
+    ]
+   }
+  ],
+  "short_description": "<p>Etiquetas de papel couché 100x50 mm para transferencia térmica, rollo de 1000</p>",
+  "description": "<p>Etiquetas de papel couché 100x50 mm para transferencia térmica, rollo de 1000. Producto de catálogo de prueba.</p>"
+ },
+ {
+  "id": 106,
+  "sku": "CINTA-110-300",
+  "name": "Cinta ribbon de cera 110 mm x 300 m",
+  "status": "publish",
+  "type": "simple",
+  "price": "6990",
+  "regular_price": "6990",
+  "stock_status": "instock",
+  "stock_quantity": 80,
+  "permalink": "https://quot.cl/producto/cinta-110-300/",
+  "images": [
+   {
+    "src": "https://quot.cl/img/cinta-110-300.jpg"
+   }
+  ],
+  "categories": [
+   {
+    "name": "Cintas"
+   }
+  ],
+  "attributes": [
+   {
+    "name": "Material",
+    "options": [
+     "Cera"
+    ]
+   }
+  ],
+  "short_description": "<p>Ribbon de cera para impresoras de transferencia térmica, 110 mm x 300 m</p>",
+  "description": "<p>Ribbon de cera para impresoras de transferencia térmica, 110 mm x 300 m. Producto de catálogo de prueba.</p>"
+ },
+ {
+  "id": 107,
+  "sku": "3NS-SC100",
+  "name": "Lector de código de barras láser 3nStar SC100 USB",
+  "status": "publish",
+  "type": "simple",
+  "price": "39990",
+  "regular_price": "39990",
+  "stock_status": "instock",
+  "stock_quantity": 60,
+  "permalink": "https://quot.cl/producto/3ns-sc100/",
+  "images": [
+   {
+    "src": "https://quot.cl/img/3ns-sc100.jpg"
+   }
+  ],
+  "categories": [
+   {
+    "name": "Lectores"
+   },
+   {
+    "name": "3nStar"
+   }
+  ],
+  "attributes": [
+   {
+    "name": "Conexión",
+    "options": [
+     "USB"
+    ]
+   }
+  ],
+  "short_description": "<p>Lector láser de códigos de barras 1D con cable USB, ideal para punto de venta</p>",
+  "description": "<p>Lector láser de códigos de barras 1D con cable USB, ideal para punto de venta. Producto de catálogo de prueba.</p>"
+ },
+ {
+  "id": 108,
+  "sku": "3NS-SC480W",
+  "name": "Lector inalámbrico 2D 3nStar SC480W Bluetooth",
+  "status": "publish",
+  "type": "simple",
+  "price": "89990",
+  "regular_price": "89990",
+  "stock_status": "instock",
+  "stock_quantity": 30,
+  "permalink": "https://quot.cl/producto/3ns-sc480w/",
+  "images": [
+   {
+    "src": "https://quot.cl/img/3ns-sc480w.jpg"
+   }
+  ],
+  "categories": [
+   {
+    "name": "Lectores"
+   },
+   {
+    "name": "3nStar"
+   }
+  ],
+  "attributes": [
+   {
+    "name": "Conexión",
+    "options": [
+     "Bluetooth",
+     "USB"
+    ]
+   }
+  ],
+  "short_description": "<p>Lector 2D inalámbrico Bluetooth para códigos QR y de barras</p>",
+  "description": "<p>Lector 2D inalámbrico Bluetooth para códigos QR y de barras. Producto de catálogo de prueba.</p>"
+ },
+ {
+  "id": 109,
+  "sku": "BARPOS-15",
+  "name": "Terminal punto de venta BarPos 15 pulgadas táctil",
+  "status": "publish",
+  "type": "simple",
+  "price": "549990",
+  "regular_price": "549990",
+  "stock_status": "outofstock",
+  "stock_quantity": 0,
+  "permalink": "https://quot.cl/producto/barpos-15/",
+  "images": [
+   {
+    "src": "https://quot.cl/img/barpos-15.jpg"
+   }
+  ],
+  "categories": [
+   {
+    "name": "Punto de venta"
+   },
+   {
+    "name": "BarPos"
+   }
+  ],
+  "attributes": [
+   {
+    "name": "Pantalla",
+    "options": [
+     "15 pulgadas"
+    ]
+   }
+  ],
+  "short_description": "<p>Terminal POS táctil todo en uno de 15 pulgadas con Windows</p>",
+  "description": "<p>Terminal POS táctil todo en uno de 15 pulgadas con Windows. Producto de catálogo de prueba.</p>"
+ },
+ {
+  "id": 110,
+  "sku": "STRETCH-500-23",
+  "name": "Stretch film 500 mm x 23 micras rollo 2,5 kg",
+  "status": "publish",
+  "type": "simple",
+  "price": "8990",
+  "regular_price": "8990",
+  "stock_status": "instock",
+  "stock_quantity": 300,
+  "permalink": "https://quot.cl/producto/stretch-500-23/",
+  "images": [
+   {
+    "src": "https://quot.cl/img/stretch-500-23.jpg"
+   }
+  ],
+  "categories": [
+   {
+    "name": "Stretch Film"
+   }
+  ],
+  "attributes": [
+   {
+    "name": "Ancho",
+    "options": [
+     "500 mm"
+    ]
+   },
+   {
+    "name": "Micraje",
+    "options": [
+     "23"
+    ]
+   }
+  ],
+  "short_description": "<p>Film estirable manual para paletizar, 500 mm de ancho, 23 micras</p>",
+  "description": "<p>Film estirable manual para paletizar, 500 mm de ancho, 23 micras. Producto de catálogo de prueba.</p>"
+ },
+ {
+  "id": 111,
+  "sku": "STRETCH-BL",
+  "name": "Stretch film negro 500 mm rollo 3 kg",
+  "status": "publish",
+  "type": "simple",
+  "price": "11990",
+  "regular_price": "11990",
+  "stock_status": "instock",
+  "stock_quantity": 100,
+  "permalink": "https://quot.cl/producto/stretch-bl/",
+  "images": [
+   {
+    "src": "https://quot.cl/img/stretch-bl.jpg"
+   }
+  ],
+  "categories": [
+   {
+    "name": "Stretch Film"
+   }
+  ],
+  "attributes": [
+   {
+    "name": "Color",
+    "options": [
+     "Negro"
+    ]
+   }
+  ],
+  "short_description": "<p>Film estirable negro opaco para ocultar contenido</p>",
+  "description": "<p>Film estirable negro opaco para ocultar contenido. Producto de catálogo de prueba.</p>"
+ },
+ {
+  "id": 112,
+  "sku": "ZEB-TC21",
+  "name": "Computador móvil Zebra TC21 Android",
+  "status": "publish",
+  "type": "simple",
+  "price": "899990",
+  "regular_price": "899990",
+  "stock_status": "instock",
+  "stock_quantity": 7,
+  "permalink": "https://quot.cl/producto/zeb-tc21/",
+  "images": [
+   {
+    "src": "https://quot.cl/img/zeb-tc21.jpg"
+   }
+  ],
+  "categories": [
+   {
+    "name": "Terminales móviles"
+   },
+   {
+    "name": "Zebra"
+   }
+  ],
+  "attributes": [
+   {
+    "name": "Sistema",
+    "options": [
+     "Android"
+    ]
+   }
+  ],
+  "short_description": "<p>Computador móvil Zebra TC21 con escáner 2D integrado</p>",
+  "description": "<p>Computador móvil Zebra TC21 con escáner 2D integrado. Producto de catálogo de prueba.</p>"
+ }
+]

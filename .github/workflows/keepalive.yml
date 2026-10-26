@@ -1,0 +1,14 @@
+# Mantiene despierta la API gratuita de Render (se duerme tras 15 min sin tráfico).
+# Activar: Settings → Secrets and variables → Actions → pestaña Variables → crear API_URL = https://tu-api.onrender.com
+# Es un paliativo: GitHub puede retrasar o saltarse ejecuciones; para producción usa el plan "starter" de Render.
+name: keepalive
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch: {}
+jobs:
+  ping:
+    if: ${{ vars.API_URL != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl -fsS --max-time 60 "${{ vars.API_URL }}/health"

@@ -108,6 +108,7 @@ const DEFAULT_SETTINGS = {
   company_phone: '',
   company_web: 'www.quot.cl',
   iva_rate: '19',
+  chatbot_enabled: '1',
   bank_holder: 'Quot Marketplace Logístico SPA',
   bank_rut: '77372977-8',
   bank_name: 'Mercado Pago',
@@ -192,6 +193,95 @@ export async function initDb() {
     `);
     await impl.query("INSERT INTO settings(key,value) VALUES('leads_order_initialized','1') ON CONFLICT (key) DO NOTHING");
   }
+
+  await impl.exec(`
+    CREATE TABLE IF NOT EXISTS catalog_products (
+      id SERIAL PRIMARY KEY,
+      wc_id INTEGER UNIQUE,
+      sku TEXT NOT NULL DEFAULT '',
+      name TEXT NOT NULL,
+      short_description TEXT NOT NULL DEFAULT '',
+      description TEXT NOT NULL DEFAULT '',
+      price INTEGER NOT NULL DEFAULT 0,
+      regular_price INTEGER NOT NULL DEFAULT 0,
+      stock_status TEXT NOT NULL DEFAULT 'instock',
+      stock_quantity INTEGER,
+      permalink TEXT NOT NULL DEFAULT '',
+      image TEXT NOT NULL DEFAULT '',
+      categories TEXT NOT NULL DEFAULT '',
+      attributes TEXT NOT NULL DEFAULT '',
+      product_type TEXT NOT NULL DEFAULT 'simple',
+      search_text TEXT NOT NULL DEFAULT '',
+      synced_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS catalog_sku_idx ON catalog_products(sku);
+
+    CREATE TABLE IF NOT EXISTS chat_sessions (
+      id TEXT PRIMARY KEY,
+      status TEXT NOT NULL DEFAULT 'bot' CHECK (status IN ('bot','handoff')),
+      fail_count INTEGER NOT NULL DEFAULT 0,
+      user_messages INTEGER NOT NULL DEFAULT 0,
+      customer_name TEXT NOT NULL DEFAULT '',
+      customer_email TEXT NOT NULL DEFAULT '',
+      customer_phone TEXT NOT NULL DEFAULT '',
+      customer_rut TEXT NOT NULL DEFAULT '',
+      conversation_id INTEGER,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE TABLE IF NOT EXISTS chat_messages (
+      id SERIAL PRIMARY KEY,
+      session_id TEXT NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+      role TEXT NOT NULL CHECK (role IN ('user','assistant','agent','system')),
+      content TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS chat_messages_session_idx ON chat_messages(session_id, id);
+    CREATE TABLE IF NOT EXISTS chat_tool_calls (
+      id SERIAL PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      args TEXT NOT NULL DEFAULT '',
+      result TEXT NOT NULL DEFAULT '',
+      ok BOOLEAN NOT NULL DEFAULT TRUE,
+      ms INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS conversations (
+      id SERIAL PRIMARY KEY,
+      chatwoot_id INTEGER UNIQUE,
+      session_id TEXT,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','open','resolved','snoozed')),
+      assignee_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      channel TEXT NOT NULL DEFAULT 'Chatbot',
+      contact_name TEXT NOT NULL DEFAULT '',
+      contact_email TEXT NOT NULL DEFAULT '',
+      contact_phone TEXT NOT NULL DEFAULT '',
+      contact_rut TEXT NOT NULL DEFAULT '',
+      lead_id INTEGER REFERENCES leads(id) ON DELETE SET NULL,
+      labels TEXT NOT NULL DEFAULT '',
+      handoff_reason TEXT NOT NULL DEFAULT '',
+      unread_count INTEGER NOT NULL DEFAULT 0,
+      last_message_at TIMESTAMPTZ,
+      last_message_preview TEXT NOT NULL DEFAULT '',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS conversations_assignee_idx ON conversations(assignee_id);
+    CREATE TABLE IF NOT EXISTS conversation_messages (
+      id SERIAL PRIMARY KEY,
+      conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+      chatwoot_message_id INTEGER UNIQUE,
+      direction TEXT NOT NULL CHECK (direction IN ('in','out')),
+      sender_type TEXT NOT NULL CHECK (sender_type IN ('contact','bot','agent','system')),
+      sender_name TEXT NOT NULL DEFAULT '',
+      content TEXT NOT NULL DEFAULT '',
+      is_private BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS conv_messages_conv_idx ON conversation_messages(conversation_id, id);
+  `);
 
   for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) {
     await impl.query('INSERT INTO settings(key,value) VALUES($1,$2) ON CONFLICT (key) DO NOTHING', [k, v]);

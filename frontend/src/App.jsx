@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { BrowserRouter, Navigate, NavLink, Route, Routes } from 'react-router-dom';
 import { AuthProvider, useAuth } from './auth.jsx';
 import { api } from './api.js';
@@ -9,6 +9,7 @@ import Quoter from './pages/Quoter.jsx';
 import Quotes from './pages/Quotes.jsx';
 import Import from './pages/Import.jsx';
 import Admin from './pages/Admin.jsx';
+import Conversations from './pages/Conversations.jsx';
 
 function Login() {
   const { login } = useAuth();
@@ -70,12 +71,20 @@ function Account({ onClose }) {
 function Shell() {
   const { user, logout, isAdmin } = useAuth();
   const [account, setAccount] = useState(false);
+  const [unread, setUnread] = useState(0);
+  useEffect(() => {
+    const load = () => api.get('/api/conversations/unread').then((r) => setUnread(r.unread)).catch(() => {});
+    load();
+    const t = setInterval(load, 15000);
+    return () => clearInterval(t);
+  }, []);
   return (
     <div className="app">
       <header className="topbar">
         <div className="brand">Quot <span>CRM</span></div>
         <nav>
           <NavLink to="/" end>Pipeline</NavLink>
+          <NavLink to="/conversaciones">Conversaciones{unread > 0 && <span className="nav-badge">{unread}</span>}</NavLink>
           <NavLink to="/cotizador">Cotizador</NavLink>
           <NavLink to="/cotizaciones">Cotizaciones</NavLink>
           <NavLink to="/productos">Productos</NavLink>
@@ -90,6 +99,7 @@ function Shell() {
       <main>
         <Routes>
           <Route path="/" element={<Pipeline />} />
+          <Route path="/conversaciones" element={<Conversations />} />
           <Route path="/cotizador" element={<Quoter />} />
           <Route path="/cotizaciones" element={<Quotes />} />
           <Route path="/productos" element={<Products />} />

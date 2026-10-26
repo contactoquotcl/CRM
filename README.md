@@ -47,3 +47,9 @@ Notion → base **Cotizaciones Quot 2026** → `···` → Exportar → CSV. En
 - Montos en CLP enteros, **netos**. La maestra guarda el costo; el precio de venta se calcula en cada cotización (margen sobre la venta, redondeado a peso). Cada cotización guarda el costo y el margen usados; IVA configurable (19 %).
 - El correlativo se incrementa de forma atómica en la base de datos (no hay saltos ni duplicados con usuarios simultáneos).
 - El PDF se genera al vuelo con PDFKit desde los datos guardados, así que siempre se puede volver a descargar.
+
+
+## Chatbot, WooCommerce y Chatwoot
+
+El CRM incluye un chatbot con IA para quot.cl (widget embebible), sincronización del catálogo de WooCommerce y una bandeja **Conversaciones** respaldada por Chatwoot.
+Guía de puesta en marcha: [`docs/INTEGRACIONES.md`](docs/INTEGRACIONES.md) · decisiones: [`DECISIONES.md`](DECISIONES.md).

@@ -12,11 +12,13 @@ export default function Admin() {
           <button className={tab === 'states' ? 'on' : ''} onClick={() => setTab('states')}>Estados del pipeline</button>
           <button className={tab === 'users' ? 'on' : ''} onClick={() => setTab('users')}>Usuarios</button>
           <button className={tab === 'settings' ? 'on' : ''} onClick={() => setTab('settings')}>Empresa y cotizador</button>
+          <button className={tab === 'chatbot' ? 'on' : ''} onClick={() => setTab('chatbot')}>Chatbot y catálogo</button>
         </div>
       </div>
       {tab === 'states' && <States />}
       {tab === 'users' && <Users />}
       {tab === 'settings' && <Settings />}
+      {tab === 'chatbot' && <Chatbot />}
     </div>
   );
 }
@@ -219,6 +221,49 @@ function Settings() {
       </div>
       <Field label="Condiciones comerciales (pie del PDF)"><textarea rows={5} value={s.quote_terms} onChange={set('quote_terms')} /></Field>
       <div><button className="btn primary" onClick={save}>Guardar configuración</button></div>
+    </div>
+  );
+}
+
+function Chatbot() {
+  const [status, setStatus] = useState(null);
+  const [enabled, setEnabled] = useState(true);
+  const [msg, setMsg] = useState('');
+  const [error, setError] = useState('');
+  const load = useCallback(async () => {
+    try {
+      const [st, s] = await Promise.all([api.get('/api/catalog/status'), api.get('/api/settings')]);
+      setStatus(st);
+      setEnabled(s.chatbot_enabled !== '0');
+    } catch (e) { setError(e.message); }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const toggle = async (v) => {
+    setError('');
+    try { await api.put('/api/settings', { chatbot_enabled: v ? '1' : '0' }); setEnabled(v); } catch (e) { setError(e.message); }
+  };
+  const sync = async () => {
+    setError(''); setMsg('');
+    try { await api.post('/api/catalog/sync'); setMsg('Sincronización iniciada. Actualiza en unos segundos.'); setTimeout(load, 4000); } catch (e) { setError(e.message); }
+  };
+  const last = status?.last_sync;
+  return (
+    <div className="panel stack">
+      <Alert>{error}</Alert>
+      <Alert kind="ok">{msg}</Alert>
+      <label className="check"><input type="checkbox" checked={enabled} onChange={(e) => toggle(e.target.checked)} /> Chatbot activo en el sitio (si lo apagas, el widget deja de crear conversaciones nuevas)</label>
+      <h3>Catálogo WooCommerce</h3>
+      {status && (
+        <p>
+          <strong>{status.products}</strong> productos sincronizados · WooCommerce {status.woocommerce_configured ? <Badge color="#16a34a">configurado</Badge> : <Badge color="#dc2626">sin configurar (faltan variables WC_*)</Badge>}
+          <br />
+          <span className="muted small">
+            {last ? `Última sincronización: ${new Date(last.at).toLocaleString('es-CL')} (${last.reason}) · ${last.ok ? `${last.count} productos, ${last.removed || 0} retirados` : `falló: ${last.error}`}` : 'Aún no se ha sincronizado.'}
+          </span>
+        </p>
+      )}
+      <div><button className="btn" onClick={sync} disabled={!status?.woocommerce_configured}>Sincronizar catálogo ahora</button></div>
     </div>
   );
 }

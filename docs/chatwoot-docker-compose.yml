@@ -1,0 +1,41 @@
+# Chatwoot propio (REFERENCIA, no probado en este proyecto). Contrasta con la guía oficial de Chatwoot antes de usarlo.
+# Pasos:  1) cp .env.chatwoot.example .env   2) docker compose run --rm rails bundle exec rails db:chatwoot_prepare
+#         3) docker compose up -d            4) poner un proxy HTTPS (Caddy/Nginx) delante del puerto 3000
+x-chatwoot: &chatwoot
+  image: chatwoot/chatwoot:latest
+  env_file: .env
+  volumes:
+    - storage:/app/storage
+services:
+  rails:
+    <<: *chatwoot
+    depends_on: [postgres, redis]
+    ports: ['127.0.0.1:3000:3000']
+    entrypoint: docker/entrypoints/rails.sh
+    command: ['bundle', 'exec', 'rails', 's', '-p', '3000', '-b', '0.0.0.0']
+  sidekiq:
+    <<: *chatwoot
+    depends_on: [postgres, redis]
+    command: ['bundle', 'exec', 'sidekiq', '-C', 'config/sidekiq.yml']
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: always
+    environment:
+      POSTGRES_DB: chatwoot
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes: [pgdata:/var/lib/postgresql/data]
+  redis:
+    image: redis:alpine
+    restart: always
+    command: ['sh', '-c', 'redis-server --requirepass "$REDIS_PASSWORD"']
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    volumes: [redisdata:/data]
+volumes:
+  storage:
+  pgdata:
+  redisdata:
+# .env mínimo: SECRET_KEY_BASE=<openssl rand -hex 64>  FRONTEND_URL=https://chat.tu-dominio.cl  RAILS_ENV=production
+#              POSTGRES_HOST=postgres POSTGRES_DATABASE=chatwoot POSTGRES_USERNAME=postgres POSTGRES_PASSWORD=...
+#              REDIS_URL=redis://:CLAVE@redis:6379  REDIS_PASSWORD=...  ENABLE_ACCOUNT_SIGNUP=false

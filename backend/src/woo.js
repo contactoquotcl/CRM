@@ -1,0 +1,55 @@
+import crypto from 'node:crypto';
+import { wcConfig } from './config.js';
+
+export const wcEnabled = () => {
+  const c = wcConfig();
+  return !!(c.baseUrl && c.key && c.secret);
+};
+
+async function wcGet(path, params = {}) {
+  const c = wcConfig();
+  if (!wcEnabled()) throw new Error('WooCommerce no está configurado (WC_BASE_URL, WC_CONSUMER_KEY, WC_CONSUMER_SECRET)');
+  const url = new URL(`${c.baseUrl}/wp-json/wc/v3${path}`);
+  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
+  const res = await fetch(url, {
+    headers: { Authorization: 'Basic ' + Buffer.from(`${c.key}:${c.secret}`).toString('base64'), Accept: 'application/json' },
+    signal: AbortSignal.timeout(c.timeoutMs),
+  });
+  if (!res.ok) throw new Error(`WooCommerce respondió ${res.status} en ${path}`);
+  return { data: await res.json(), totalPages: Number(res.headers.get('x-wp-totalpages') || 1) };
+}
+
+/** Recorre todo el catálogo publicado; llama onPage(productos) por cada página. */
+export async function wcListAll(onPage) {
+  let page = 1;
+  let totalPages = 1;
+  do {
+    const r = await wcGet('/products', { per_page: 100, page, status: 'publish' });
+    totalPages = r.totalPages;
+    await onPage(r.data);
+    page++;
+  } while (page <= totalPages && page <= 200);
+}
+
+export const wcGetProduct = async (id) => (await wcGet(`/products/${Number(id)}`)).data;
+
+export async function wcFindBySku(sku) {
+  const { data } = await wcGet('/products', { sku: String(sku), status: 'publish' });
+  return data[0] || null;
+}
+
+export const wcVariations = async (id) => (await wcGet(`/products/${Number(id)}/variations`, { per_page: 50 })).data;
+
+/** Firma de webhooks de WooCommerce: base64(HMAC-SHA256(cuerpo crudo, secreto)). */
+export function verifyWcSignature(rawBody, signature) {
+  const secret = wcConfig().webhookSecret;
+  if (!secret || !signature) return false;
+  const expected = crypto.createHmac('sha256', secret).update(rawBody).digest();
+  let given;
+  try {
+    given = Buffer.from(String(signature), 'base64');
+  } catch {
+    return false;
+  }
+  return given.length === expected.length && crypto.timingSafeEqual(given, expected);
+}

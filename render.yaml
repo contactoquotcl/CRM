@@ -9,7 +9,7 @@ services:
     name: quot-crm-api
     runtime: node
     rootDir: backend
-    plan: free             # se "duerme" tras 15 min sin uso; el primer request tarda ~1 min
+    plan: free             # se "duerme" tras 15 min sin uso; el primer request tarda ~1 min. Con el chatbot en producción usa `starter` (ver docs/INTEGRACIONES.md §5)
     buildCommand: npm ci
     startCommand: npm start
     healthCheckPath: /health
@@ -28,3 +28,29 @@ services:
         sync: false
       - key: CORS_ORIGIN
         sync: false          # URL del frontend en Vercel, ej. https://quot-crm.vercel.app
+
+      # --- Chatbot, WooCommerce y Chatwoot: los valores se cargan en el panel de Render (nunca en el repo) ---
+      - key: CRM_PUBLIC_URL
+        sync: false
+      - key: CHATBOT_ALLOWED_ORIGINS
+        value: https://quot.cl,https://www.quot.cl
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: WC_BASE_URL
+        sync: false
+      - key: WC_CONSUMER_KEY
+        sync: false
+      - key: WC_CONSUMER_SECRET
+        sync: false
+      - key: WC_WEBHOOK_SECRET
+        sync: false
+      - key: CHATWOOT_BASE_URL
+        sync: false
+      - key: CHATWOOT_ACCOUNT_ID
+        sync: false
+      - key: CHATWOOT_API_TOKEN
+        sync: false
+      - key: CHATWOOT_INBOX_ID
+        sync: false
+      - key: CHATWOOT_WEBHOOK_SECRET
+        sync: false

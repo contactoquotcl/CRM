@@ -5,6 +5,15 @@ import rateLimit from 'express-rate-limit';
 import { authRouter, usersRouter, settingsRouter, productsRouter, statesRouter } from './routes/core.js';
 import { leadsRouter, importRouter } from './routes/leads.js';
 import { quotesRouter } from './routes/quotes.js';
+import { wooWebhookRouter, catalogRouter } from './routes/woo.js';
+import { chatwootWebhookRouter } from './routes/chatwoot.js';
+import { chatbotRouter } from './routes/chatbot.js';
+import { conversationsRouter } from './routes/conversations.js';
+import { botConfig } from './config.js';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 
 export function createApp() {
   const app = express();
@@ -12,12 +21,31 @@ export function createApp() {
   app.use(helmet());
 
   const origins = (process.env.CORS_ORIGIN || '').split(',').map((s) => s.trim()).filter(Boolean);
-  app.use(
-    cors({
-      origin: origins.length ? origins : process.env.NODE_ENV === 'production' ? false : true,
-      allowedHeaders: ['Content-Type', 'Authorization'],
-    })
-  );
+  const crmCors = cors({
+    origin: origins.length ? origins : process.env.NODE_ENV === 'production' ? false : true,
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  });
+  // El endpoint público del bot solo acepta peticiones desde quot.cl (CHATBOT_ALLOWED_ORIGINS); el resto, desde el CRM.
+  const botCors = cors({
+    origin: (origin, cb) => {
+      const c = botConfig();
+      cb(null, !origin || (!c.originsExplicit && process.env.NODE_ENV !== 'production') || c.allowedOrigins.includes(origin));
+    },
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  });
+  app.use((req, res, next) => (req.path.startsWith('/api/chatbot') ? botCors(req, res, next) : crmCors(req, res, next)));
+
+  // Webhooks firmados: necesitan el cuerpo crudo, por eso van antes de express.json()
+  app.use('/api/woo/webhook', wooWebhookRouter);
+  app.use('/api/chatwoot/webhook', chatwootWebhookRouter);
+
+  // Widget embebible (se carga como <script> desde otro dominio)
+  app.get('/widget.js', (_req, res) => {
+    res.set('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.set('Cache-Control', 'public, max-age=300');
+    res.sendFile(path.join(PUBLIC_DIR, 'widget.js'));
+  });
+
   app.use(express.json({ limit: '5mb' }));
 
   app.get('/health', (_req, res) => res.json({ ok: true }));
@@ -33,6 +61,9 @@ export function createApp() {
   app.use('/api/leads', leadsRouter);
   app.use('/api/quotes', quotesRouter);
   app.use('/api/import', importRouter);
+  app.use('/api/catalog', catalogRouter);
+  app.use('/api/chatbot', chatbotRouter);
+  app.use('/api/conversations', conversationsRouter);
 
   app.use('/api', (_req, res) => res.status(404).json({ error: 'No encontrado' }));
 
