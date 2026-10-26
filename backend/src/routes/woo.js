@@ -8,6 +8,10 @@ import { catalogStatus, deleteByWcId, syncAll, upsertProduct } from '../catalog.
 export const wooWebhookRouter = Router();
 wooWebhookRouter.post('/', express.raw({ type: '*/*', limit: '5mb' }), async (req, res) => {
   const raw = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+  // Al guardar un webhook, WooCommerce envía un "ping" SIN firma ni topic con cuerpo `webhook_id=<n>`. No hace nada: se acepta.
+  if (!req.get('x-wc-webhook-signature') && !req.get('x-wc-webhook-topic') && /^webhook_id=\d+$/.test(raw.toString('utf8').trim())) {
+    return res.json({ ok: true, ping: true });
+  }
   const problem = wcSignatureProblem(raw, req.get('x-wc-webhook-signature'));
   if (problem) {
     console.warn(`[woo-webhook] rechazado: ${problem} (cuerpo ${raw.length} bytes, topic ${req.get('x-wc-webhook-topic') || '-'})`);

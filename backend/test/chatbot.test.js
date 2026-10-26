@@ -55,6 +55,7 @@ const wooHook = (topic, payload, { secret, raw } = {}) => {
   const body = raw ?? JSON.stringify(payload);
   return api('POST', '/api/woo/webhook', { raw: body, headers: { 'content-type': raw ? 'application/x-www-form-urlencoded' : 'application/json', ...(topic ? { 'x-wc-webhook-topic': topic } : {}), 'x-wc-webhook-signature': wcSign(body, secret) } });
 };
+const wooPingUnsigned = () => api('POST', '/api/woo/webhook', { raw: 'webhook_id=12', headers: { 'content-type': 'application/x-www-form-urlencoded' } });
 const cwHook = (payload, { secret, ts = Math.floor(Date.now() / 1000), bad } = {}) => {
   const body = JSON.stringify(payload);
   return api('POST', '/api/chatwoot/webhook', { raw: body, headers: { 'content-type': 'application/json', 'x-chatwoot-timestamp': String(ts), 'x-chatwoot-signature': bad ? 'sha256=00' : cwSign(body, ts, secret) } });
@@ -104,6 +105,8 @@ test('catálogo: sincronización paginada, búsqueda con sinónimos, reconciliac
 test('webhooks de WooCommerce: firma válida/ inválida, alta, cambio, baja y ping', async () => {
   const prod = { ...F.wooProducts.find((p) => p.id === 103), name: 'Zebra ZT231 industrial NUEVA', price: '1250000' };
   assert.equal((await wooHook('product.updated', prod, { secret: 'otro-secreto' })).status, 401);
+  assert.equal((await wooPingUnsigned()).status, 200, 'el ping sin firma de WooCommerce al guardar el webhook se acepta');
+  assert.equal((await api('POST', '/api/woo/webhook', { raw: JSON.stringify(prod), headers: { 'content-type': 'application/json', 'x-wc-webhook-topic': 'product.updated' } })).status, 401, 'un evento sin firma se rechaza');
   assert.equal((await wooHook('product.updated', prod)).status, 200);
   assert.equal((await query('SELECT name, price FROM catalog_products WHERE wc_id=103')).rows[0].price, 1250000);
   assert.equal((await wooHook('product.created', { ...prod, id: 150, sku: 'NEW-1', name: 'Producto nuevo de prueba' })).status, 200);
