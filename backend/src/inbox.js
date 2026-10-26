@@ -1,6 +1,7 @@
 // Servicio de conversaciones: guarda todo en Postgres (fuente de la bandeja del CRM) y, si Chatwoot está
 // configurado, lo refleja allí (motor de mensajería). Sin Chatwoot funciona en modo local.
 import { query } from './db.js';
+import { crmPublicUrl } from './config.js';
 import * as cw from './chatwoot.js';
 import { HttpError, formatRut, today, validRut } from './util.js';
 import { hashPassword } from './auth.js';
@@ -160,7 +161,7 @@ export async function handoff(session, { motivo = 'otro', resumen = '', transcri
     [conv.id, agent?.id ?? null, leadId, `${motivo}: ${resumen}`.slice(0, 500), session.customer_name, session.customer_email, session.customer_phone, session.customer_rut]
   );
 
-  const base = (process.env.CRM_PUBLIC_URL || '').replace(/\/$/, '');
+  const base = crmPublicUrl();
   const lines = [
     '🤖➜👤 Derivación desde el chatbot',
     `Motivo: ${motivo}`,

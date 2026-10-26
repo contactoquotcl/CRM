@@ -216,6 +216,14 @@ export async function initDb() {
     );
     CREATE INDEX IF NOT EXISTS catalog_sku_idx ON catalog_products(sku);
 
+    CREATE TABLE IF NOT EXISTS integration_values (
+      key TEXT PRIMARY KEY,
+      value_enc TEXT NOT NULL,
+      is_secret BOOLEAN NOT NULL DEFAULT TRUE,
+      updated_by INTEGER,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
     CREATE TABLE IF NOT EXISTS chat_sessions (
       id TEXT PRIMARY KEY,
       status TEXT NOT NULL DEFAULT 'bot' CHECK (status IN ('bot','handoff')),
@@ -286,6 +294,7 @@ export async function initDb() {
   for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) {
     await impl.query('INSERT INTO settings(key,value) VALUES($1,$2) ON CONFLICT (key) DO NOTHING', [k, v]);
   }
+  await (await import('./secrets.js')).loadOverrides();
   const { rows } = await impl.query('SELECT COUNT(*)::int AS n FROM pipeline_states');
   if (rows[0].n === 0) {
     for (let i = 0; i < DEFAULT_STATES.length; i++) {

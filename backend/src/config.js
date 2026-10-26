@@ -1,10 +1,15 @@
-// Configuración de integraciones, leída de variables de entorno EN CADA USO (permite cambiarla en tests).
-const e = (k, d = '') => (process.env[k] ?? d).toString().trim();
+// Configuración de integraciones, leída EN CADA USO. Prioridad: valor guardado desde Admin → Integraciones (cifrado en BD)
+// y, si no hay, variable de entorno.
+import { overrides } from './overrides.js';
+const raw = (k) => (overrides.has(k) ? overrides.get(k) : process.env[k]);
+const e = (k, d = '') => (raw(k) ?? d).toString().trim();
 const num = (k, d) => {
-  const n = Number(process.env[k]);
-  return Number.isFinite(n) && process.env[k] !== '' && process.env[k] !== undefined ? n : d;
+  const v = raw(k);
+  const n = Number(v);
+  return Number.isFinite(n) && v !== '' && v !== undefined ? n : d;
 };
-const trimSlash = (s) => s.replace(/\/+$/, '');
+export const crmPublicUrl = () => trimSlash(e('CRM_PUBLIC_URL'));
+function trimSlash(s) { return s.replace(/\/+$/, ''); }
 
 export const wcConfig = () => ({
   baseUrl: trimSlash(e('WC_BASE_URL')),

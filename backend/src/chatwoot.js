@@ -88,3 +88,10 @@ export function verifyChatwootWebhook({ rawBody, headers, query }) {
   }
   return !!query?.token && safeEq(query.token, secret);
 }
+
+/** Prueba de conexión: lee la bandeja configurada. */
+export async function chatwootPing() {
+  const c = chatwootConfig();
+  const r = await cw('GET', `/inboxes/${encodeURIComponent(c.inboxId)}`);
+  return { inbox: r.name || r.payload?.name || `#${c.inboxId}`, channel: r.channel_type || '' };
+}

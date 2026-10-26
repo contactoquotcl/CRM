@@ -12,12 +12,14 @@ export default function Admin() {
           <button className={tab === 'states' ? 'on' : ''} onClick={() => setTab('states')}>Estados del pipeline</button>
           <button className={tab === 'users' ? 'on' : ''} onClick={() => setTab('users')}>Usuarios</button>
           <button className={tab === 'settings' ? 'on' : ''} onClick={() => setTab('settings')}>Empresa y cotizador</button>
+          <button className={tab === 'integrations' ? 'on' : ''} onClick={() => setTab('integrations')}>Integraciones (claves)</button>
           <button className={tab === 'chatbot' ? 'on' : ''} onClick={() => setTab('chatbot')}>Chatbot y catálogo</button>
         </div>
       </div>
       {tab === 'states' && <States />}
       {tab === 'users' && <Users />}
       {tab === 'settings' && <Settings />}
+      {tab === 'integrations' && <Integrations />}
       {tab === 'chatbot' && <Chatbot />}
     </div>
   );
@@ -264,6 +266,118 @@ function Chatbot() {
         </p>
       )}
       <div><button className="btn" onClick={sync} disabled={!status?.woocommerce_configured}>Sincronizar catálogo ahora</button></div>
+    </div>
+  );
+}
+
+
+const randomSecret = () => Array.from(crypto.getRandomValues(new Uint8Array(24)), (b) => b.toString(16).padStart(2, '0')).join('');
+
+function Integrations() {
+  const [data, setData] = useState(null);
+  const [edits, setEdits] = useState({});
+  const [clears, setClears] = useState({});
+  const [busy, setBusy] = useState('');
+  const [msg, setMsg] = useState('');
+  const [error, setError] = useState('');
+  const [tests, setTests] = useState({});
+  const load = useCallback(async () => {
+    try { setData(await api.get('/api/integrations')); } catch (e) { setError(e.message); }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const dirty = Object.keys(edits).filter((k) => edits[k] !== '').length + Object.keys(clears).filter((k) => clears[k]).length;
+  const save = async () => {
+    setError(''); setMsg(''); setBusy('save');
+    try {
+      const values = Object.fromEntries(Object.entries(edits).filter(([, v]) => v !== ''));
+      const clear = Object.keys(clears).filter((k) => clears[k]);
+      const r = await api.put('/api/integrations', { values, clear });
+      setData((d) => ({ ...d, groups: r.groups }));
+      setEdits({}); setClears({}); setMsg('Guardado. Los cambios ya están activos, no hace falta reiniciar nada.');
+    } catch (e) { setError(e.message); } finally { setBusy(''); }
+  };
+  const test = async (id) => {
+    setBusy(id); setTests((t) => ({ ...t, [id]: null }));
+    try { const r = await api.post(`/api/integrations/test/${id}`); setTests((t) => ({ ...t, [id]: r })); }
+    catch (e) { setTests((t) => ({ ...t, [id]: { ok: false, message: e.message } })); }
+    finally { setBusy(''); }
+  };
+  const copy = (text) => navigator.clipboard?.writeText(text).then(() => setMsg('Copiado al portapapeles.'));
+
+  if (!data) return <div className="panel"><Alert>{error}</Alert>Cargando…</div>;
+  return (
+    <div className="panel stack">
+      <Alert>{error}</Alert>
+      <Alert kind="ok">{msg}</Alert>
+      <p className="muted">
+        Aquí cargas las claves de las integraciones. Se guardan <strong>cifradas</strong> en la base de datos y no vuelven a mostrarse (solo ves si están configuradas y los últimos 4 caracteres).
+        Lo que guardes aquí tiene prioridad sobre las variables de entorno de Render. Para cambiar una clave, escribe la nueva y guarda; para dejarla igual, no toques el campo.
+      </p>
+      {data.groups.map((g) => (
+        <fieldset key={g.id} className="panel stack" style={{ border: '1px solid var(--border, #e5e7eb)', borderRadius: 8, padding: 14 }}>
+          <legend><strong>{g.title}</strong></legend>
+          {g.help && <p className="muted small">{g.help}</p>}
+          {g.fields.map((f) => {
+            const cleared = !!clears[f.key];
+            const val = edits[f.key] ?? (f.secret ? '' : f.value || '');
+            return (
+              <div key={f.key} className="field">
+                <label>
+                  {f.label}{' '}
+                  {f.configured && !cleared
+                    ? <Badge color="#16a34a">{f.source === 'crm' ? 'configurado en el CRM' : 'configurado en Render'}{f.hint ? ` ${f.hint}` : ''}</Badge>
+                    : <Badge color={cleared ? '#d97706' : '#dc2626'}>{cleared ? 'se borrará al guardar' : 'sin configurar'}</Badge>}
+                </label>
+                <div className="row" style={{ display: 'flex', gap: 8 }}>
+                  {f.type === 'bool' ? (
+                    <select value={val} onChange={(e) => setEdits({ ...edits, [f.key]: e.target.value })}>
+                      <option value="">{f.configured ? '(sin cambios)' : 'No (por defecto)'}</option>
+                      <option value="false">No, son netos</option>
+                      <option value="true">Sí, incluyen IVA</option>
+                    </select>
+                  ) : (
+                    <input
+                      type={f.secret ? 'password' : 'text'}
+                      autoComplete="off"
+                      spellCheck={false}
+                      value={val}
+                      placeholder={f.secret && f.configured ? 'Escribe para reemplazar' : f.placeholder}
+                      onChange={(e) => setEdits({ ...edits, [f.key]: e.target.value })}
+                      style={{ flex: 1 }}
+                    />
+                  )}
+                  {f.generate && <button type="button" className="btn small" onClick={() => setEdits({ ...edits, [f.key]: randomSecret() })}>Generar</button>}
+                  {f.generate && edits[f.key] && <button type="button" className="btn small" onClick={() => copy(edits[f.key])}>Copiar</button>}
+                  {f.source === 'crm' && <button type="button" className="btn small" onClick={() => setClears({ ...clears, [f.key]: !cleared })}>{cleared ? 'Deshacer' : 'Quitar'}</button>}
+                </div>
+                {f.help && <div className="muted small">{f.help}</div>}
+                {f.generate && edits[f.key] && <div className="muted small">Copia este secreto ahora (no se podrá ver después) y pégalo en {g.id === 'woocommerce' ? 'WooCommerce' : 'Chatwoot'}; luego guarda.</div>}
+              </div>
+            );
+          })}
+          {g.webhook && (
+            <div className="small">
+              <strong>Webhook que debes crear en {g.webhook === 'woo' ? 'WooCommerce' : 'Chatwoot'}:</strong>
+              <div><code>{data.webhooks[g.webhook].url}</code> <button type="button" className="btn small" onClick={() => copy(data.webhooks[g.webhook].url)}>Copiar URL</button></div>
+              <div className="muted">{(data.webhooks[g.webhook].topics || data.webhooks[g.webhook].events).join(', ')}</div>
+              <div className="muted">{data.webhooks[g.webhook].note}</div>
+            </div>
+          )}
+          {g.test && (
+            <div>
+              <button type="button" className="btn small" disabled={!!busy || dirty > 0} onClick={() => test(g.id)} title={dirty ? 'Guarda primero los cambios' : ''}>{busy === g.id ? 'Probando…' : 'Probar conexión'}</button>
+              {tests[g.id] && <span style={{ marginLeft: 10, color: tests[g.id].ok ? '#16a34a' : '#dc2626' }}>{tests[g.id].ok ? '✔ ' : '✖ '}{tests[g.id].message}</span>}
+            </div>
+          )}
+        </fieldset>
+      ))}
+      <div className="panel stack">
+        <strong>Código para el sitio quot.cl (widget del chat)</strong>
+        <code style={{ wordBreak: 'break-all' }}>{data.webhooks.widget}</code>
+        <div><button type="button" className="btn small" onClick={() => copy(data.webhooks.widget)}>Copiar código</button></div>
+      </div>
+      <div><button className="btn primary" onClick={save} disabled={!dirty || busy === 'save'}>{busy === 'save' ? 'Guardando…' : `Guardar cambios${dirty ? ` (${dirty})` : ''}`}</button></div>
     </div>
   );
 }

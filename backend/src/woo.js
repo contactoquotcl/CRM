@@ -53,3 +53,9 @@ export function verifyWcSignature(rawBody, signature) {
   }
   return given.length === expected.length && crypto.timingSafeEqual(given, expected);
 }
+
+/** Prueba de conexión: pide 1 producto con las credenciales actuales. */
+export async function wcPing() {
+  const r = await wcGet('/products', { per_page: 1, status: 'publish' });
+  return { products_visible: Array.isArray(r.data) ? r.data.length : 0 };
+}

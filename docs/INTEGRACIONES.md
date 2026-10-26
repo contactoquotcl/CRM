@@ -2,6 +2,8 @@
 
 Guía de puesta en marcha de la Fase 1. Todos los valores secretos se cargan **solo en Render → Environment** (nunca en el repositorio).
 
+> **Cargar claves desde el CRM:** Admin → *Integraciones (claves)* permite ingresar (y reemplazar) Anthropic, WooCommerce, Chatwoot y los secretos de webhook sin tocar Render; muestra las URLs de webhook para copiar y tiene botones *Probar conexión*. Lo guardado ahí tiene prioridad sobre las variables de entorno de esta sección. Opcional: define `SETTINGS_ENCRYPTION_KEY` (texto largo aleatorio) en Render para que el cifrado no dependa de `JWT_SECRET`.
+
 ## 1. Variables de entorno (Render, servicio `quot-crm-api`)
 
 | Variable | Obligatoria | Para qué |

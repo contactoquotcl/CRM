@@ -25,15 +25,17 @@ Registro de decisiones tomadas de forma autónoma (donde faltaba un dato se elig
 | 17 | Tiempo real | **Polling corto** (bandeja 4–5 s, widget 3 s tras derivar, badge 15 s). SSE/WebSocket se pospone: con el plan gratuito de Render y proxies intermedios es frágil, y el polling cubre el caso con latencia aceptable. | — |
 | 18 | Notificaciones | Badge de no leídas en el menú. El correo opcional queda para la Fase 3. | — |
 | 19 | Alcance diferido | Adjuntos, etiquetas editables, panel lateral del cliente y "generar cotización desde la conversación" (Fase 2); horario, reglas de asignación, métricas y órdenes de WooCommerce (Fase 3). No se usó iframe + SSO de Chatwoot: la bandeja nativa ya está en esta fase. | — |
+| 21 | Claves desde el CRM | Admin → **Integraciones (claves)**: las claves se guardan cifradas (AES-256-GCM, llave derivada de `SETTINGS_ENCRYPTION_KEY` o, si no existe, de `JWT_SECRET`) en la tabla `integration_values`, nunca se devuelven al navegador (solo "configurado" + últimos 4) y tienen prioridad sobre las variables de entorno, que quedan como respaldo. Solo rol admin. Si cambia `JWT_SECRET` sin fijar `SETTINGS_ENCRYPTION_KEY`, las claves guardadas dejan de poder leerse (se cae al entorno y hay que reingresarlas). | Fijar `SETTINGS_ENCRYPTION_KEY` en Render |
 | 20 | Usuario "Bot" | Usuario técnico inactivo (`bot@quot.invalid`): no inicia sesión ni recibe conversaciones; solo atribuye lo que crea el bot. | — |
 
 ### Infraestructura (Render)
 Ver `docs/INTEGRACIONES.md §5`. Resumen: el plan gratuito duerme la API y rompe el chat y los webhooks; solución mínima = **API en `starter`** + base de datos de pago antes del **19-nov-2026**. Se dejó un *keep-alive* gratis como paliativo.
 
 ### Pendiente de cargar por el dueño (Fase 1)
+**Ahora se cargan desde el CRM: Admin → Integraciones (claves)** (las variables de Render siguen funcionando como respaldo). Lista:
 `ANTHROPIC_API_KEY`, `WC_BASE_URL`, `WC_CONSUMER_KEY`, `WC_CONSUMER_SECRET`, `WC_WEBHOOK_SECRET`, `CHATWOOT_BASE_URL`, `CHATWOOT_ACCOUNT_ID`, `CHATWOOT_API_TOKEN`, `CHATWOOT_INBOX_ID`, `CHATWOOT_WEBHOOK_SECRET`, `CRM_PUBLIC_URL` (todas en Render → Environment). Frontend (Vercel): no hay variables nuevas.
 
 ### Calidad
-- 19 pruebas de integración (`backend/test/`): catálogo, webhooks WC y Chatwoot (firma válida e inválida), bot con tool use, reglas duras, derivación, round-robin, permisos por rol, CORS/rate limit.
+- 24 pruebas de integración (`backend/test/`): catálogo, webhooks WC y Chatwoot (firma válida e inválida), bot con tool use, reglas duras, derivación, round-robin, permisos por rol, CORS/rate limit.
 - Evaluación con 20 casos (`backend/eval/`): **no se ejecutó contra el modelo real** (no hay clave en este entorno); el arnés está validado en modo simulado.
 - Smoke con Playwright (`e2e/smoke.py`): widget → bot → derivación → bandeja → respuesta → pipeline. OK.

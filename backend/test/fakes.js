@@ -70,6 +70,7 @@ export async function startFakes({ pageSize = 5 } = {}) {
       state.cwCalls.push({ method: req.method, path: rest, body, token: req.headers.api_access_token });
       if (req.headers.api_access_token !== 'cw-token') return json(res, 401, { error: 'unauthorized' });
       for (const f of state.cwFail) if (rest.includes(f)) return json(res, 500, { error: 'falla simulada' });
+      if (req.method === 'GET' && /^\/inboxes\/\d+$/.test(rest)) return json(res, 200, { id: 7, name: 'Web Quot', channel_type: 'Channel::Api' });
       if (req.method === 'GET' && rest === '/agents') return json(res, 200, state.cwAgents);
       if (req.method === 'POST' && rest === '/contacts') return json(res, 200, { payload: { contact: { id: state.nextId++, name: body.name } } });
       if (req.method === 'PUT' && rest.startsWith('/contacts/')) return json(res, 200, {});
