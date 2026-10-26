@@ -41,18 +41,16 @@ export async function wcFindBySku(sku) {
 export const wcVariations = async (id) => (await wcGet(`/products/${Number(id)}/variations`, { per_page: 50 })).data;
 
 /** Firma de webhooks de WooCommerce: base64(HMAC-SHA256(cuerpo crudo, secreto)). */
-export function verifyWcSignature(rawBody, signature) {
+export function wcSignatureProblem(rawBody, signature) {
   const secret = wcConfig().webhookSecret;
-  if (!secret || !signature) return false;
+  if (!secret) return 'sin_secreto_en_el_crm';
+  if (!signature) return 'sin_firma_en_la_peticion';
   const expected = crypto.createHmac('sha256', secret).update(rawBody).digest();
-  let given;
-  try {
-    given = Buffer.from(String(signature), 'base64');
-  } catch {
-    return false;
-  }
-  return given.length === expected.length && crypto.timingSafeEqual(given, expected);
+  const given = Buffer.from(String(signature), 'base64');
+  if (given.length === expected.length && crypto.timingSafeEqual(given, expected)) return null;
+  return 'firma_no_coincide';
 }
+export const verifyWcSignature = (rawBody, signature) => wcSignatureProblem(rawBody, signature) === null;
 
 /** Prueba de conexión: pide 1 producto con las credenciales actuales. */
 export async function wcPing() {

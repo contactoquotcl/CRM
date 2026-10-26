@@ -1,14 +1,18 @@
 import express, { Router } from 'express';
 import { authenticate, requireAdmin } from '../auth.js';
 import { HttpError } from '../util.js';
-import { verifyWcSignature, wcEnabled } from '../woo.js';
+import { wcSignatureProblem, wcEnabled } from '../woo.js';
 import { catalogStatus, deleteByWcId, syncAll, upsertProduct } from '../catalog.js';
 
 // Webhook público de WooCommerce (firmado). Usa cuerpo crudo para validar la firma.
 export const wooWebhookRouter = Router();
 wooWebhookRouter.post('/', express.raw({ type: '*/*', limit: '5mb' }), async (req, res) => {
   const raw = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
-  if (!verifyWcSignature(raw, req.get('x-wc-webhook-signature'))) throw new HttpError(401, 'Firma inválida');
+  const problem = wcSignatureProblem(raw, req.get('x-wc-webhook-signature'));
+  if (problem) {
+    console.warn(`[woo-webhook] rechazado: ${problem} (cuerpo ${raw.length} bytes, topic ${req.get('x-wc-webhook-topic') || '-'})`);
+    return res.status(401).json({ error: 'Firma inválida', motivo: problem });
+  }
   const topic = req.get('x-wc-webhook-topic');
   if (!topic) return res.json({ ok: true, ping: true }); // ping al crear el webhook
   let payload;
