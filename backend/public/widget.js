@@ -1,7 +1,7 @@
 /*!
  * Widget de chat de Quot. Se incluye con una sola línea en el sitio:
  *   <script src="https://TU-API.onrender.com/widget.js" defer></script>
- * Opcionales: data-api (URL de la API; por defecto el origen del script), data-title, data-color.
+ * Opcionales: data-api (URL de la API; por defecto el origen del script), data-title, data-color, data-color-dark.
  */
 (function () {
   'use strict';
@@ -11,7 +11,10 @@
   var script = document.currentScript || document.querySelector('script[src*="widget.js"]');
   var API = ((script && script.getAttribute('data-api')) || (script && script.src ? new URL(script.src).origin : '')).replace(/\/$/, '');
   var TITLE = (script && script.getAttribute('data-title')) || 'Quot · Asistente';
-  var COLOR = (script && script.getAttribute('data-color')) || '#1d4ed8';
+  // Verde tipo WhatsApp: botón flotante en verde brillante y el resto (cabecera, burbujas, enviar) en un verde más oscuro para que el texto blanco se lea bien.
+  var CUSTOM = script && script.getAttribute('data-color');
+  var COLOR = CUSTOM || '#25D366';
+  var DARK = (script && script.getAttribute('data-color-dark')) || CUSTOM || '#128C7E';
   var KEY = 'quot_chat_token';
   var WELCOME = '¡Hola! ¿En qué te puedo ayudar?';
   var token = null, lastId = 0, status = 'bot', open = false, busy = false, pollTimer = null, unread = 0;
@@ -30,12 +33,12 @@
     '.fab svg{width:28px;height:28px}.dot{position:absolute;top:2px;right:2px;min-width:18px;height:18px;border-radius:9px;background:#dc2626;color:#fff;font-size:11px;line-height:18px;text-align:center;display:none;padding:0 4px}' +
     '.panel{position:fixed;right:20px;bottom:90px;width:370px;max-width:calc(100vw - 24px);height:540px;max-height:calc(100vh - 110px);background:#fff;border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.28);display:none;flex-direction:column;overflow:hidden}' +
     '.panel.on{display:flex}' +
-    '.head{background:' + COLOR + ';color:#fff;padding:14px 16px;display:flex;align-items:center;justify-content:space-between}' +
+    '.head{background:' + DARK + ';color:#fff;padding:14px 16px;display:flex;align-items:center;justify-content:space-between}' +
     '.head b{font-size:15px}.head small{display:block;opacity:.85;font-size:12px;margin-top:2px}' +
     '.x{background:none;border:0;color:#fff;font-size:24px;cursor:pointer;line-height:1}' +
     '.msgs{flex:1;overflow-y:auto;padding:14px;background:#f1f5f9;display:flex;flex-direction:column;gap:8px}' +
     '.m{max-width:85%;padding:9px 12px;border-radius:12px;font-size:14px;line-height:1.4;white-space:pre-wrap;word-wrap:break-word}' +
-    '.m.user{align-self:flex-end;background:' + COLOR + ';color:#fff;border-bottom-right-radius:3px}' +
+    '.m.user{align-self:flex-end;background:' + DARK + ';color:#fff;border-bottom-right-radius:3px}' +
     '.m.bot{align-self:flex-start;background:#fff;color:#0f172a;border-bottom-left-radius:3px;box-shadow:0 1px 2px rgba(0,0,0,.08)}' +
     '.m.agent{align-self:flex-start;background:#dcfce7;color:#14532d;border-bottom-left-radius:3px}' +
     '.m.agent .who{display:block;font-size:11px;font-weight:600;margin-bottom:2px}' +
@@ -44,8 +47,8 @@
     '.typing{align-self:flex-start;color:#64748b;font-size:13px;padding:2px 6px}' +
     'form{display:flex;gap:8px;padding:10px;border-top:1px solid #e2e8f0;background:#fff}' +
     'textarea{flex:1;resize:none;border:1px solid #cbd5e1;border-radius:10px;padding:9px 10px;font-size:14px;max-height:90px;outline:none}' +
-    'textarea:focus{border-color:' + COLOR + '}' +
-    '.send{border:0;background:' + COLOR + ';color:#fff;border-radius:10px;padding:0 16px;font-size:14px;cursor:pointer}.send:disabled{opacity:.5;cursor:default}' +
+    'textarea:focus{border-color:' + DARK + '}' +
+    '.send{border:0;background:' + DARK + ';color:#fff;border-radius:10px;padding:0 16px;font-size:14px;cursor:pointer}.send:disabled{opacity:.5;cursor:default}' +
     '.foot{font-size:11px;color:#94a3b8;text-align:center;padding:0 0 8px;background:#fff}' +
     '@media(max-width:520px){.panel{right:0;bottom:0;width:100vw;max-width:100vw;height:100vh;max-height:100vh;border-radius:0}.fab{right:14px;bottom:14px}}' +
     '</style>' +
