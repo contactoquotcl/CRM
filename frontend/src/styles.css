@@ -173,7 +173,7 @@ table.items td.num { padding-top: 14px; }
 
 /* conversaciones */
 .nav-badge { background: #dc2626; color: #fff; border-radius: 999px; font-size: 11px; padding: 0 6px; margin-left: 6px; font-weight: 700; }
-.inbox { display: grid; grid-template-columns: 340px 1fr 300px; gap: 14px; height: calc(100vh - 54px - 40px); min-height: 480px; }
+.inbox { display: grid; grid-template-columns: 340px 1fr 300px; gap: 14px; height: calc(100vh - 54px - 40px); height: calc(100dvh - 54px - 40px); min-height: 480px; }
 .inbox-list, .inbox-chat { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); display: flex; flex-direction: column; min-height: 0; }
 .inbox-head { padding: 12px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
 .inbox-head .search { min-width: 0; width: 100%; }
@@ -199,4 +199,108 @@ table.items td.num { padding-top: 14px; }
 .inbox-side h3, .inbox-side h4 { margin: 0; }
 .inbox-side h4 { font-size: 13px; margin-bottom: 4px; }
 .side-block { display: flex; flex-direction: column; gap: 4px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
-@media (max-width: 900px) { .inbox { grid-template-columns: 1fr; height: auto; } .inbox-rows { max-height: 260px; } .inbox-chat { min-height: 480px; } }
+
+.back-btn, .filters-toggle { display: none; }
+body { -webkit-text-size-adjust: 100%; overflow-x: hidden; }
+img, svg { max-width: 100%; }
+.login { width: min(340px, calc(100vw - 32px)); }
+.seg { max-width: 100%; overflow-x: auto; }
+.seg button { white-space: nowrap; }
+.chat-who { min-width: 0; flex: 1 1 200px; word-break: break-word; }
+
+/* ---------- Tablet (≤1024px) ---------- */
+@media (max-width: 1024px) {
+  main { padding: 16px; }
+  .inbox { grid-template-columns: 300px 1fr; height: auto; min-height: 0; }
+  .inbox-list, .inbox-chat { height: calc(100dvh - 54px - 32px); min-height: 420px; }
+  .inbox-side { grid-column: 1 / -1; max-height: none; overflow: visible; }
+}
+
+/* ---------- Móvil (≤760px) ---------- */
+@media (max-width: 760px) {
+  body { font-size: 15px; }
+  /* barra superior: marca + usuario arriba, menú desplazable debajo */
+  .topbar { flex-wrap: wrap; height: auto; gap: 0 10px; padding: 8px 12px 0; }
+  .brand { order: 1; flex: 1; }
+  .who { order: 2; gap: 8px; }
+  .who .link { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .topbar nav { order: 3; flex: 1 1 100%; margin: 8px -12px 0; padding: 0 8px 8px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .topbar nav::-webkit-scrollbar { display: none; }
+  .topbar nav a { padding: 9px 14px; }
+  main { padding: 12px 12px calc(12px + env(safe-area-inset-bottom)); }
+  /* campos a 16px evitan el zoom automático de iOS; objetivos táctiles ≥40px */
+  input, select, textarea { font-size: 16px; padding: 10px 11px; }
+  input[type=checkbox] { width: 20px; height: 20px; }
+  .btn { padding: 10px 14px; min-height: 40px; }
+  .btn.small { padding: 8px 12px; min-height: 36px; font-size: 13px; }
+  .seg button { padding: 10px 12px; }
+  .chip { padding: 7px 13px; font-size: 13px; }
+  .icon-btn { padding: 8px 12px; }
+  .toolbar { gap: 10px; }
+  .toolbar h2 { flex: 1 1 100%; margin-right: 0; }
+  .toolbar input.search, .toolbar select { width: 100%; flex: 1 1 100%; }
+  .toolbar > .btn { flex: 1 1 auto; }
+  .filters { gap: 14px; padding: 12px; }
+  .filter-group, .filter-group .row { width: 100%; }
+  .filter-group .row select, .filter-group .row input[type=date] { flex: 1 1 120px; width: auto; min-width: 0; padding: 8px; }
+  .filter-end { margin-left: 0; justify-content: flex-start; align-self: stretch; }
+  .chips { max-width: none; }
+  .panel { padding: 12px; }
+  .panel.center { margin: 20px auto; }
+  .row.between { gap: 6px; }
+  /* tablas: desplazamiento horizontal con ancho mínimo legible */
+  .table-wrap { -webkit-overflow-scrolling: touch; }
+  .table-wrap table { min-width: 640px; }
+  .table-wrap table.items { min-width: 820px; }
+  th, td { padding: 8px 10px; }
+  /* tablero: columnas casi a pantalla completa con imán al deslizar */
+  .board { scroll-snap-type: x mandatory; margin: 0 -12px; padding: 0 12px 12px; }
+  .column { flex: 0 0 86%; scroll-snap-align: center; }
+  .card-order { opacity: 1; }
+  .card-foot { flex-wrap: wrap; gap: 4px; }
+  .filters-toggle { display: inline-block; flex: 1 1 100%; }
+  .filters:not(.open) { display: none; }
+  ul.sortable li > .row:first-child { flex-wrap: nowrap; flex: 1 1 100%; }
+  ul.sortable li > .row:first-child input:not([type=color]) { flex: 1; min-width: 0; }
+  ul.sortable li { gap: 8px; }
+  /* modales */
+  .overlay { padding: 0; align-items: stretch; }
+  .modal, .modal.wide { max-width: none; min-height: 100%; border-radius: 0; box-shadow: none; }
+  .modal-body { padding: 14px; padding-bottom: calc(14px + env(safe-area-inset-bottom)); }
+  .modal-actions { position: sticky; bottom: 0; background: #fff; padding: 10px 0; border-top: 1px solid var(--line); }
+  .modal-actions .btn { flex: 1; }
+  .combo-list { max-height: 50vh; }
+  .combo-list button { padding: 12px; }
+  .totals, .internal { width: 100%; margin-left: 0; }
+  .margin-box .field { max-width: none; width: 100%; }
+  .margin-box > .muted { padding-bottom: 10px; }
+  /* bandeja: una vista a la vez (lista → conversación → datos del cliente) */
+  .inbox { display: block; height: auto; }
+  .inbox .inbox-list { height: calc(100dvh - 130px); min-height: 360px; }
+  .inbox.has-sel .inbox-list { display: none; }
+  .inbox:not(.has-sel) .inbox-chat, .inbox:not(.has-sel) .inbox-side { display: none; }
+  .inbox-chat { height: calc(100dvh - 130px); min-height: 360px; }
+  .inbox-side { margin-top: 12px; }
+  .back-btn { display: inline-flex; align-items: center; flex: 0 0 100%; justify-content: center; }
+  .chat-head { padding: 10px 12px; }
+  .chat-head > .row { width: 100%; }
+  .chat-head select { flex: 1; }
+  .chat-msgs { padding: 10px; }
+  .bubble { max-width: 90%; }
+  .chat-compose { padding: 8px 10px calc(8px + env(safe-area-inset-bottom)); }
+  .chat-compose .row.between { gap: 8px; }
+  .chat-compose .row .muted { display: none; }
+  .unread { bottom: 34px; }
+  /* admin / integraciones: botones debajo del campo */
+  fieldset.panel .row { flex-wrap: wrap; }
+  fieldset.panel .row > input, fieldset.panel .row > select { flex: 1 1 100% !important; }
+}
+
+@media (max-width: 380px) {
+  .topbar nav a { padding: 8px 11px; }
+  .brand { font-size: 16px; }
+  .column { flex-basis: 92%; }
+}
+
+/* pantallas táctiles: sin recuadros que dependen de hover */
+@media (hover: none) { .lead-card { -webkit-tap-highlight-color: transparent; } }

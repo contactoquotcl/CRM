@@ -30,6 +30,7 @@ export default function Pipeline() {
   const [states, setStates] = useState([]);
   const [leads, setLeads] = useState([]);
   const [q, setQ] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
   const [selStates, setSelStates] = useState([]); // vacío = todos
   const [creators, setCreators] = useState([]);
   const [selCreators, setSelCreators] = useState([]); // vacío = todos
@@ -140,9 +141,10 @@ export default function Pipeline() {
           <button className={view === 'table' ? 'on' : ''} onClick={() => setView('table')}>Tabla</button>
         </div>
         <button className="btn primary" onClick={() => setEditing('new')}>+ Nuevo lead</button>
+        <button type="button" className="btn filters-toggle" onClick={() => setShowFilters(!showFilters)}>{showFilters ? 'Ocultar filtros' : 'Filtros'}</button>
       </div>
 
-      <div className="filters panel">
+      <div className={`filters panel ${showFilters ? 'open' : ''}`}>
         <div className="filter-group">
           <span className="field-label">Estado</span>
           <div className="chips">

@@ -50,7 +50,16 @@
     'textarea:focus{border-color:' + DARK + '}' +
     '.send{border:0;background:' + DARK + ';color:#fff;border-radius:10px;padding:0 16px;font-size:14px;cursor:pointer}.send:disabled{opacity:.5;cursor:default}' +
     '.foot{font-size:11px;color:#94a3b8;text-align:center;padding:0 0 8px;background:#fff}' +
-    '@media(max-width:520px){.panel{right:0;bottom:0;width:100vw;max-width:100vw;height:100vh;max-height:100vh;border-radius:0}.fab{right:14px;bottom:14px}}' +
+    '.panel{height:min(540px,calc(100dvh - 110px));max-height:calc(100vh - 110px);right:max(20px,env(safe-area-inset-right));bottom:calc(90px + env(safe-area-inset-bottom))}' +
+    '.fab{right:max(20px,env(safe-area-inset-right));bottom:calc(20px + env(safe-area-inset-bottom))}' +
+    '.msgs{overscroll-behavior:contain;-webkit-overflow-scrolling:touch}' +
+    '@media(max-width:520px){.panel{inset:0;right:0;bottom:0;width:100%;max-width:100%;height:100dvh;max-height:100dvh;border-radius:0}' +
+    '.head{padding:12px 14px;padding-top:calc(12px + env(safe-area-inset-top))}.x{font-size:32px;min-width:44px;min-height:44px}' +
+    'textarea{font-size:16px}.send{min-height:44px;padding:0 18px}.m{font-size:15px;max-width:88%}' +
+    'form{padding:10px;padding-bottom:calc(10px + env(safe-area-inset-bottom))}.foot{padding-bottom:calc(8px + env(safe-area-inset-bottom))}' +
+    '.fab{right:14px;bottom:calc(14px + env(safe-area-inset-bottom))}.fab.hide{display:none}}' +
+    '@media(max-height:480px) and (orientation:landscape){.foot{display:none}.head small{display:none}}' +
+    '@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}' +
     '</style>' +
     '<button class="fab" aria-label="Abrir chat de Quot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span class="dot"></span></button>' +
     '<section class="panel" role="dialog" aria-label="Chat con Quot"><div class="head"><div><b></b><small>Respuestas automáticas · puedes pedir un ejecutivo</small></div><button class="x" aria-label="Cerrar chat">×</button></div>' +
@@ -156,13 +165,22 @@
   }
 
   function toggle(v) {
-    open = v; panel.classList.toggle('on', v); fab.setAttribute('aria-label', v ? 'Cerrar chat de Quot' : 'Abrir chat de Quot');
+    open = v; panel.classList.toggle('on', v); fab.classList.toggle('hide', v); fab.setAttribute('aria-label', v ? 'Cerrar chat de Quot' : 'Abrir chat de Quot');
     if (v) {
-      unread = 0; setDot();
+      fit(); unread = 0; setDot();
       if (!msgs.children.length) start().catch(function () { bubble('sys', 'El chat no está disponible por ahora. Escríbenos a contacto@quot.cl'); });
       setTimeout(function () { input.focus(); }, 50);
     }
   }
+  // Teclado virtual en móviles: ajusta el alto del panel al área visible
+  function fit() {
+    var vv = window.visualViewport;
+    if (!vv || window.innerWidth > 520) { panel.style.height = ''; panel.style.top = ''; panel.style.bottom = ''; return; }
+    panel.style.height = vv.height + 'px'; panel.style.top = vv.offsetTop + 'px'; panel.style.bottom = 'auto';
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+  if (window.visualViewport) { window.visualViewport.addEventListener('resize', fit); window.visualViewport.addEventListener('scroll', fit); }
+  window.addEventListener('orientationchange', function () { setTimeout(fit, 200); });
   fab.addEventListener('click', function () { toggle(!open); });
   $('.x').addEventListener('click', function () { toggle(false); });
   form.addEventListener('submit', function (e) {

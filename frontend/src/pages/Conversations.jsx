@@ -95,7 +95,7 @@ export default function Conversations() {
   const st = conv ? STATUS[conv.status] || [conv.status, '#64748b'] : null;
 
   return (
-    <div className="inbox">
+    <div className={`inbox ${selected ? 'has-sel' : ''}`}>
       <aside className="inbox-list">
         <div className="inbox-head">
           <h2>Conversaciones</h2>
@@ -133,7 +133,8 @@ export default function Conversations() {
         {conv && (
           <>
             <div className="chat-head">
-              <div>
+              <button type="button" className="btn small back-btn" onClick={() => setParams({})}>← Volver</button>
+              <div className="chat-who">
                 <strong>{conv.contact_name || conv.contact_email || `Visitante #${conv.id}`}</strong>
                 <div className="muted small">{[conv.contact_company, conv.contact_rut && `RUT ${conv.contact_rut}`, conv.contact_email, conv.contact_phone, conv.channel].filter(Boolean).join(' · ')}</div>
                 {conv.handoff_reason && <div className="muted small">Motivo de derivación: {conv.handoff_reason}</div>}
