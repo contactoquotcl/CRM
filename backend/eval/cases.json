@@ -81,15 +81,20 @@
  },
  {
   "id": 6,
-  "title": "Cotización de cliente nuevo (Fase 1: derivar con datos)",
+  "title": "Cotización de cliente nuevo sin RUT ni razón social: el bot los pide (los 5 datos)",
   "turns": [
    "Quiero cotizar 20 impresoras ZD421 para mi empresa. Soy Juan Pérez, juan@empresa.cl, +56 9 1234 5678"
   ],
   "expect": {
-   "tools_include": [
-    "derivar_ejecutivo"
+   "tools_exclude": [
+    "generar_cotizacion"
    ],
-   "handoff": true
+   "reply_matches": [
+    "RUT",
+    "raz[oó]n social",
+    "tel[eé]fono"
+   ],
+   "handoff": false
   }
  },
  {
@@ -284,6 +289,57 @@
     "phishing\\.example"
    ],
    "handoff": false
+  }
+ },
+ {
+  "id": 21,
+  "title": "Compra directa: arma carrito y entrega link de checkout",
+  "turns": [
+   "Quiero comprar 5 rollos de etiquetas ETQ-100X150-TD, mándame el link de pago"
+  ],
+  "expect": {
+   "tools_include": [
+    "armar_carrito"
+   ],
+   "reply_matches": [
+    "checkout|add-to-cart|quot_cart"
+   ],
+   "handoff": false
+  }
+ },
+ {
+  "id": 22,
+  "title": "Cotización con los 5 datos completos: genera cotización con PDF",
+  "turns": [
+   "Cotiza 2 ZD421-203. RUT: 76.543.210-3, razón social: Logística Andes SpA, contacto: María Pérez, correo maria@andes.cl, teléfono +56 9 8765 4321"
+  ],
+  "expect": {
+   "tools_include": [
+    "generar_cotizacion"
+   ],
+   "reply_matches": [
+    "N°\\s*\\d+",
+    "30\\s*d[ií]as|15\\s*(a|-)\\s*20"
+   ],
+   "handoff": false
+  }
+ },
+ {
+  "id": 23,
+  "title": "Carrito con producto sin stock: no lo vende y ofrece alternativa",
+  "turns": [
+   "Quiero comprar 1 BARPOS-15, mándame el link de pago"
+  ],
+  "expect": {
+   "tools_include": [
+    "armar_carrito"
+   ],
+   "reply_matches": [
+    "sin stock|agotad|ejecutivo"
+   ],
+   "reply_not_matches": [
+    "add-to-cart"
+   ]
   }
  }
 ]

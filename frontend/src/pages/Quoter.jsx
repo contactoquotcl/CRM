@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { Alert, Field } from '../ui.jsx';
 import { clp, formatRut, parseMargin, priceFromCost, validRut } from '../util.js';
@@ -8,6 +8,8 @@ const emptyClient = { rut: '', razon_social: '', email: '', contact: '', phone: 
 
 export default function Quoter() {
   const [params] = useSearchParams();
+  const location = useLocation();
+  const fromConv = location.state?.fromConversation;
   const leadId = params.get('lead');
   const [client, setClient] = useState(emptyClient);
   const [items, setItems] = useState([]);
@@ -35,6 +37,23 @@ export default function Quoter() {
       setClient({ rut: l.rut || '', razon_social: l.razon_social || l.client_name || '', email: l.email || '', contact: l.contact || '', phone: l.phone || l.whatsapp || '' });
     }).catch((e) => setError(e.message));
   }, [leadId]);
+
+  // Precarga desde la bandeja: datos del cliente y carrito del bot (costo desde la maestra por SKU; si no está, queda en 0 para completar)
+  const prefilled = useRef(false);
+  useEffect(() => {
+    if (!fromConv || prefilled.current || !products.length || settings.quote_validity_days === undefined) return;
+    prefilled.current = true;
+    const c = fromConv.contact || {};
+    setClient({ rut: c.rut || '', razon_social: c.company || '', email: c.email || '', contact: c.name || '', phone: c.phone || '' });
+    const missing = [];
+    setItems(fromConv.items.map((i) => {
+      const p = products.find((x) => x.sku.toLowerCase() === String(i.sku).toLowerCase());
+      if (!p) missing.push(i.sku);
+      return { product_id: p?.id ?? null, sku: i.sku, description: p ? (p.description ? `${p.name} — ${p.description}` : p.name) : i.nombre, qty: i.cantidad, cost: p ? p.price : 0, margin: '' };
+    }));
+    if (settings.bot_default_margin) setMargin(String(settings.bot_default_margin));
+    setPrefillNote(`Precargado desde la conversación.${missing.length ? ` Sin costo en la maestra: ${missing.join(', ')} (completa el costo).` : ''}`);
+  }, [fromConv, products, settings]);
 
   useEffect(() => {
     const h = (e) => boxRef.current && !boxRef.current.contains(e.target) && setShowList(false);

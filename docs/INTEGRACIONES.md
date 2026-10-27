@@ -8,6 +8,8 @@ Guía de puesta en marcha de la Fase 1. Todos los valores secretos se cargan **s
 
 | Variable | Obligatoria | Para qué |
 |---|---|---|
+| `API_PUBLIC_URL` | no | URL pública de la API (enlace al PDF de cotizaciones del bot). En Render se detecta sola. |
+| `BOT_MAX_CART_CLP`, `BOT_MAX_CART_LINES`, `BOT_MAX_LINE_QTY`, `BOT_MAX_QUOTES_PER_SESSION` | no | Límites del carrito/cotización del bot (100.000.000 · 20 · 999 · 5). |
 | `ANTHROPIC_API_KEY` o `GEMINI_API_KEY` | sí (una de las dos) | Clave de la IA del chat (Claude o Gemini). Opcionales: `LLM_PROVIDER` (`anthropic`/`gemini`; vacío = el que tenga clave), `GEMINI_MODEL` (por defecto `gemini-2.5-flash`). Sin clave el chat deriva todo a un ejecutivo. Se pueden cargar desde Admin → Integraciones. |
 | `WC_BASE_URL` | sí | URL de la tienda, ej. `https://quot.cl` |
 | `WC_CONSUMER_KEY`, `WC_CONSUMER_SECRET` | sí | Claves REST de WooCommerce con permiso **solo lectura** |
@@ -61,6 +63,12 @@ Opción B (mini plugin): `docs/quot-chat-widget.php` → copiar a `wp-content/pl
 
 Opcionales en la etiqueta: `data-title="Quot · Asistente"`, `data-color="#1d4ed8"`, `data-api="https://…"`.
 Para apagar el bot sin tocar el sitio: **Admin → Chatbot y catálogo → desmarcar "Chatbot activo"**.
+
+### Carrito con varios productos (Fase 2)
+- **1 producto**: el bot entrega `https://quot.cl/checkout/?add-to-cart=ID&quantity=N` (nativo de WooCommerce, no requiere nada).
+- **Varios productos**: instala el fragmento `docs/quot-carrito.php` en WPCode (PHP Snippet, «Ejecutar en todas partes») y marca la casilla en Admin → Chatbot y catálogo → *Cotizaciones y carritos del bot*. Sin el fragmento, el bot entrega un enlace por producto.
+- **Cotizaciones**: el PDF se entrega con un enlace firmado de la propia API (`/api/chatbot/quote-pdf?q=…&s=…`). Render entrega la URL pública sola (`RENDER_EXTERNAL_URL`); si usas dominio propio, cárgala en Admin → Integraciones → *URL pública de esta API*.
+- **Compras en el panel del cliente**: la clave de WooCommerce debe tener permiso de **lectura** (la de solo lectura sirve; incluye pedidos).
 
 ## 5. Render plan gratuito: impacto y solución mínima
 

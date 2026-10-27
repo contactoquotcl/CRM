@@ -8,6 +8,8 @@ const num = (k, d) => {
   const n = Number(v);
   return Number.isFinite(n) && v !== '' && v !== undefined ? n : d;
 };
+// URL pública de esta API (para el enlace al PDF). Render la entrega sola en RENDER_EXTERNAL_URL.
+export const apiPublicUrl = () => trimSlash(e('API_PUBLIC_URL') || process.env.RENDER_EXTERNAL_URL || '');
 export const crmPublicUrl = () => trimSlash(e('CRM_PUBLIC_URL'));
 function trimSlash(s) { return s.replace(/\/+$/, ''); }
 
@@ -66,6 +68,10 @@ export const botConfig = () => ({
   deliveryText: e('BOT_DELIVERY_TEXT', '15 a 20 días hábiles después de confirmado el pago'),
   shippingText: e('BOT_SHIPPING_TEXT', 'Despacho gratis en la Región Metropolitana; en otras regiones el despacho es por cuenta del comprador'),
   minOrderClp: num('BOT_MIN_ORDER_CLP', 0),
+  maxCartClp: num('BOT_MAX_CART_CLP', 100000000),
+  maxCartLines: num('BOT_MAX_CART_LINES', 20),
+  maxLineQty: num('BOT_MAX_LINE_QTY', 999),
+  maxQuotesPerSession: num('BOT_MAX_QUOTES_PER_SESSION', 5),
 });
 
 export const chatbotTokenSecret = () => {

@@ -3,6 +3,8 @@ import rateLimit from 'express-rate-limit';
 import { query } from '../db.js';
 import { botConfig } from '../config.js';
 import { HttpError } from '../util.js';
+import { quotePdfBuffer } from '../quoteService.js';
+import { verifyPdfSig } from '../chatbot/commerce.js';
 import { WELCOME, createSession, handleUserMessage, messagesAfter, sessionFromToken } from '../chatbot/engine.js';
 
 export const chatbotRouter = Router();
@@ -22,6 +24,18 @@ chatbotRouter.use((req, _res, next) => {
 const ipLimiter = rateLimit({ windowMs: 60 * 1000, limit: () => botConfig().ipPerMinute, standardHeaders: true, legacyHeaders: false, message: { error: 'Demasiadas solicitudes, espera un momento' } });
 const newSessionLimiter = rateLimit({ windowMs: 60 * 60 * 1000, limit: () => botConfig().sessionsPerIpHour, standardHeaders: true, legacyHeaders: false, message: { error: 'Demasiadas conversaciones nuevas desde tu conexión' } });
 chatbotRouter.use(ipLimiter);
+
+// PDF de una cotización del bot: enlace firmado (id + HMAC), sin sesión. Solo trae datos de venta (sin costo ni margen).
+chatbotRouter.get('/quote-pdf', async (req, res) => {
+  const id = Number(req.query.q);
+  if (!Number.isInteger(id) || !verifyPdfSig(id, req.query.s)) throw new HttpError(404, 'Enlace inválido');
+  const pdf = await quotePdfBuffer(id);
+  if (!pdf) throw new HttpError(404, 'Cotización no encontrada');
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `inline; filename="Cotizacion-${pdf.number}.pdf"`);
+  res.setHeader('Cache-Control', 'private, max-age=300');
+  res.send(pdf.buffer);
+});
 
 // Límite por sesión (en memoria): X mensajes por minuto
 const hits = new Map();

@@ -7,6 +7,7 @@ process.env.PGLITE_DIR = 'memory://';
 process.env.ADMIN_EMAIL = 'admin@test.cl';
 process.env.ADMIN_PASSWORD = 'admin-pass-123';
 process.env.JWT_SECRET = 'test-secret';
+process.env.PDF_NO_COMPRESS = '1';
 
 const fakes = await startFakes({ pageSize: 5 });
 const F = fakes.state;
@@ -140,7 +141,7 @@ test('chatbot: sesión firmada, tool use, precio EN VIVO y espejo en bandeja y C
   const req3 = JSON.stringify(F.llmRequests[2].messages);
   assert.match(req3, /precio_neto\\":5990/); // precio vivo, no 5490
   assert.doesNotMatch(req3, /5490/);
-  assert.equal(F.llmRequests[0].tools.length, 3);
+  assert.equal(F.llmRequests[0].tools.length, 5);
   assert.match(F.llmRequests[0].system, /Asistente Quot/);
   assert.equal((await query("SELECT COUNT(*)::int AS n FROM chat_tool_calls WHERE name IN ('buscar_productos','ver_producto')")).rows[0].n, 2);
 
@@ -274,6 +275,143 @@ test('spam: se detecta sin pasar por la IA, se deriva sin asignar y sin lead; cl
   const t6 = await newSession();
   assert.equal((await say(t6, 'Gana dinero facil con casino online')).data.handoff, false);
   await api('PUT', '/api/settings', { token: admin, body: { spam_detection: '1' } });
+});
+
+const pdfText = (buf) => [...buf.toString('latin1').matchAll(/<([0-9a-fA-F]+)>/g)].map((m) => Buffer.from(m[1], 'hex').toString('latin1')).join(' ').replace(/\s+/g, '');
+const lastToolResult = (body) => JSON.parse(body.messages.at(-1).content.at(-1).content);
+const CLIENTE = { rut: '76.543.210-3', razon_social: 'Logística Andes SpA', nombre: 'María Pérez', correo: 'maria@andes.cl', telefono: '+56 9 8765 4321' };
+
+test('fase 2 · carrito: link de checkout, totales en código, stock y mínimos', async () => {
+  F.wooLive = {};
+  const token = await newSession();
+  F.llmQueue = [
+    llmTool('armar_carrito', { items: [{ sku: 'ETQ-100X150-TD', cantidad: 10 }] }),
+    (b) => { const o = lastToolResult(b); return llmText(`Total $${o.total_con_iva.toLocaleString('es-CL')} con IVA. Paga aquí: ${o.link_checkout}`); },
+  ];
+  const r = await say(token, 'Quiero comprar 10 rollos de etiquetas 100x150');
+  assert.match(r.data.replies[0].content, /\$65\.331 con IVA/); // 5.490 × 10 = 54.900 + IVA, calculado en código
+  assert.match(r.data.replies[0].content, new RegExp(`/checkout/\\?add-to-cart=104&quantity=10`));
+  assert.doesNotMatch(r.data.replies[0].content, /enlace removido/);
+  const sid = JSON.parse(Buffer.from(token.split('.')[1], 'base64url')).sid;
+  const cart = (await query("SELECT subtotal, status FROM carts WHERE session_id=$1", [sid])).rows[0];
+  assert.deepEqual([cart.subtotal, cart.status], [54900, 'active']);
+
+  // Varios productos: sin plugin → un enlace por producto; con plugin → un solo enlace ?quot_cart
+  const items = [{ sku: 'ETQ-100X150-TD', cantidad: 2 }, { sku: 'CINTA-110-300', cantidad: 3 }];
+  F.llmQueue = [llmTool('armar_carrito', { items }), llmText('Listo')];
+  await say(token, 'agrega también cinta');
+  assert.match(JSON.stringify(F.llmRequests.at(-1).messages.at(-1)), /links_por_producto/);
+  await api('PUT', '/api/settings', { token: admin, body: { woo_cart_plugin: '1' } });
+  F.llmQueue = [llmTool('armar_carrito', { items }), llmText('Listo')];
+  await say(token, 'otra vez');
+  assert.match(JSON.stringify(F.llmRequests.at(-1).messages.at(-1)), /quot_cart=104:2,106:3/);
+  await api('PUT', '/api/settings', { token: admin, body: { woo_cart_plugin: '0' } });
+
+  // Sin stock, cantidad inválida, mínimo de compra
+  F.llmRequests.length = 0;
+  F.llmQueue = [llmTool('armar_carrito', { items: [{ sku: 'BARPOS-15', cantidad: 1 }] }), llmTool('armar_carrito', { items: [{ sku: 'ZD421-203', cantidad: 5000 }] }), llmText('No puedo armarlo, ¿te derivo con un ejecutivo?')];
+  await say(token, 'quiero una barpos');
+  const errs = F.llmRequests.flatMap((q) => q.messages.flatMap((m) => (Array.isArray(m.content) ? m.content : []))).filter((b) => b.type === 'tool_result' && b.is_error).map((b) => b.content);
+  assert.ok(errs.some((e) => /sin stock/.test(e)));
+  assert.ok(errs.some((e) => /Cantidad inválida/.test(e)));
+  process.env.BOT_MIN_ORDER_CLP = '100000';
+  F.llmQueue = [llmTool('armar_carrito', { items: [{ sku: 'ETQ-100X150-TD', cantidad: 1 }] }), llmText('El mínimo no se cumple.')];
+  await say(token, 'una sola etiqueta');
+  assert.match(JSON.stringify(F.llmRequests.at(-1).messages.at(-1)), /compra mínima/);
+  delete process.env.BOT_MIN_ORDER_CLP;
+});
+
+test('fase 2 · cotización del bot: motor único, lead en Cotizado, PDF sin costo/margen y enlace firmado', async () => {
+  for (const [sku, name, cost] of [['ZD421-203', 'Impresora Zebra ZD421', 300000], ['ZD421-TT', 'Impresora Zebra ZD421 TT', 350000]]) await query('INSERT INTO products(sku,name,price) VALUES($1,$2,$3) ON CONFLICT (sku) DO NOTHING', [sku, name, cost]);
+  process.env.API_PUBLIC_URL = base;
+  const token = await newSession();
+  // Faltan datos → el bot debe pedirlos
+  F.llmQueue = [llmTool('generar_cotizacion', { cliente: { rut: CLIENTE.rut }, items: [{ sku: 'ZD421-203', cantidad: 2 }] }), llmText('¿Me das razón social, contacto, correo y teléfono?')];
+  F.llmRequests.length = 0;
+  await say(token, 'quiero cotizar 2 ZD421');
+  assert.match(JSON.stringify(F.llmRequests.at(-1).messages.at(-1)), /falta pedir al cliente: razón social, nombre de contacto, correo, teléfono/);
+  assert.equal((await query('SELECT COUNT(*)::int AS n FROM quotes WHERE channel=\'Chatbot\'')).rows[0].n, 0);
+
+  const before = Number((await query("SELECT value FROM settings WHERE key='quote_next_number'")).rows[0].value);
+  F.llmQueue = [
+    llmTool('generar_cotizacion', { cliente: CLIENTE, items: [{ sku: 'ZD421-203', cantidad: 2 }] }),
+    (b) => { const o = lastToolResult(b); return llmText(`Cotización N° ${o.numero_cotizacion}: total $${o.total_con_iva.toLocaleString('es-CL')} con IVA. PDF: ${o.link_pdf}`); },
+  ];
+  const r = await say(token, `Mis datos: ${CLIENTE.razon_social}, ${CLIENTE.nombre}, ${CLIENTE.correo}, ${CLIENTE.telefono}, RUT ${CLIENTE.rut}. Confirmo 2 ZD421-203`);
+  const reply = r.data.replies[0].content;
+  assert.match(reply, new RegExp(`N° ${before}:`)); // correlativo del motor existente
+  assert.match(reply, /\$928\.176 con IVA/); // 2 × 389.990 neto + IVA, precio vivo de la tienda
+  assert.doesNotMatch(reply, /enlace removido/);
+  assert.equal(r.data.handoff, false); // bajo el umbral
+
+  const q = (await query('SELECT q.*, u.name AS creator FROM quotes q JOIN users u ON u.id=q.created_by WHERE q.number=$1', [before])).rows[0];
+  assert.deepEqual([q.channel, q.creator, q.validity_days, q.total], ['Chatbot', 'Bot', 30, 928176]);
+  assert.match(q.notes, /15 a 20 días hábiles/);
+  assert.match(q.notes, /Región Metropolitana/);
+  const lead = (await query('SELECT l.channel, s.name AS state, l.quote_number FROM leads l JOIN pipeline_states s ON s.id=l.state_id WHERE l.id=$1', [q.lead_id])).rows[0];
+  assert.deepEqual([lead.channel, lead.state, lead.quote_number], ['Chatbot', 'Cotizado', before]);
+  const item = (await query('SELECT cost, unit_price, margin_pct FROM quote_items WHERE quote_id=$1', [q.id])).rows[0];
+  assert.deepEqual([item.cost, item.unit_price], [300000, 389990]); // costo de la maestra; precio = tienda
+  assert.equal(Math.round(item.margin_pct), 23);
+  const conv = (await convOf(token)).conversation;
+  assert.equal(conv.lead_id, q.lead_id);
+
+  // PDF por el enlace firmado: datos de venta y transferencia; jamás costo ni margen
+  const link = reply.match(/PDF: (\S+)/)[1];
+  const pdf = await fetch(link);
+  assert.equal(pdf.status, 200);
+  const buf = Buffer.from(await pdf.arrayBuffer());
+  assert.equal(buf.subarray(0, 4).toString(), '%PDF');
+  const text = pdfText(buf);
+  assert.match(text, /389\.990/);
+  assert.match(text, /DATOSPARATRANSFERENCIA/);
+  assert.doesNotMatch(text, /300\.000|margen|costo/i);
+  assert.equal((await fetch(link.replace(/s=.{3}/, 's=xxx'))).status, 404, 'firma adulterada');
+  assert.equal((await fetch(`${base}/api/chatbot/quote-pdf?q=${q.id + 1}&s=${link.split('s=')[1]}`)).status, 404, 'firma de otra cotización');
+
+  // Modo "margen": precio = costo de la maestra / (1 − margen por defecto)
+  await api('PUT', '/api/settings', { token: admin, body: { bot_price_source: 'margen', bot_default_margin: '20' } });
+  const t2 = await newSession();
+  F.llmQueue = [llmTool('generar_cotizacion', { cliente: CLIENTE, items: [{ sku: 'ZD421-203', cantidad: 1 }] }), llmText('Listo')];
+  await say(t2, 'cotiza 1 ZD421-203');
+  const q2 = (await query("SELECT q.total, i.unit_price, i.margin_pct FROM quotes q JOIN quote_items i ON i.quote_id=q.id WHERE q.channel='Chatbot' ORDER BY q.id DESC LIMIT 1")).rows[0];
+  assert.deepEqual([q2.unit_price, q2.total, q2.margin_pct], [375000, 446250, 20]);
+  await api('PUT', '/api/settings', { token: admin, body: { bot_price_source: 'woocommerce', bot_default_margin: '25' } });
+
+  // Sobre el umbral: se cotiza y se deriva con nota para el ejecutivo
+  await api('PUT', '/api/settings', { token: admin, body: { bot_quote_handoff_clp: '1000000' } });
+  const t3 = await newSession();
+  F.llmQueue = [llmTool('generar_cotizacion', { cliente: CLIENTE, items: [{ sku: 'ZD421-TT', cantidad: 3 }] }), llmText('Cotización lista; un ejecutivo la revisará contigo por este chat.')];
+  const big = await say(t3, 'cotiza 3 ZD421-TT');
+  assert.equal(big.data.handoff, true);
+  const full = await convOf(t3);
+  assert.equal(full.conversation.status, 'open');
+  assert.match(JSON.stringify(full.messages.map((m) => m.content)), /sobre el umbral/);
+  await api('PUT', '/api/settings', { token: admin, body: { bot_quote_handoff_clp: '5000000' } });
+  delete process.env.API_PUBLIC_URL;
+});
+
+test('fase 2 · panel de cliente: leads, cotizaciones, carrito y compras; permisos por rol', async () => {
+  const token = await newSession();
+  F.wooOrders = [
+    { id: 900, number: '900', status: 'completed', total: '65331', currency: 'CLP', date_created: '2026-10-01T10:00:00', billing: { email: 'maria@andes.cl' }, line_items: [{ quantity: 10, name: 'Etiqueta 100x150' }] },
+    { id: 901, number: '901', status: 'completed', total: '1', currency: 'CLP', date_created: '2026-10-02T10:00:00', billing: { email: 'otra@persona.cl' }, line_items: [] },
+  ];
+  F.llmQueue = [llmTool('generar_cotizacion', { cliente: { ...CLIENTE, rut: '99.500.410-0' }, items: [{ sku: 'ETQ-100X150-TD', cantidad: 4 }] }), llmText('Listo')];
+  await say(token, 'cotiza 4 etiquetas');
+  const conv = (await convOf(token)).conversation;
+  const panel = (await api('GET', `/api/conversations/${conv.id}/customer`, { token: admin })).data;
+  assert.equal(panel.contact.company, CLIENTE.razon_social);
+  assert.equal(panel.quotes.length >= 1 && panel.quotes[0].channel, 'Chatbot');
+  assert.equal(panel.leads.some((l) => l.state_name === 'Cotizado'), true);
+  assert.equal(panel.cart.status, 'quoted');
+  assert.equal(panel.cart.items[0].sku, 'ETQ-100X150-TD');
+  assert.deepEqual(panel.purchases.map((p) => p.number), ['900'], 'solo pedidos del mismo correo');
+  // un usuario estándar solo ve el panel de lo que puede ver
+  const hidden = await api('GET', `/api/conversations/${conv.id}/customer`, { token: beto });
+  assert.ok([200, 403, 404].includes(hidden.status));
+  assert.equal((await api('GET', `/api/conversations/${conv.id}/customer`)).status, 401);
+  F.wooOrders = [];
 });
 
 test('chatbot: validación estricta de argumentos y degradación sin WooCommerce ni IA', async () => {

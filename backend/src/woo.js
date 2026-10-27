@@ -57,3 +57,13 @@ export async function wcPing() {
   const r = await wcGet('/products', { per_page: 1, status: 'publish' });
   return { products_visible: Array.isArray(r.data) ? r.data.length : 0 };
 }
+
+/** Pedidos recientes de un cliente (por correo de facturación). Requiere permiso de lectura de pedidos en la clave. */
+export async function wcOrdersByEmail(email) {
+  const r = await wcGet('/orders', { search: email, per_page: 20, orderby: 'date', order: 'desc' });
+  const e = String(email).toLowerCase();
+  return (r.data || [])
+    .filter((o) => String(o.billing?.email || '').toLowerCase() === e)
+    .slice(0, 10)
+    .map((o) => ({ id: o.id, number: o.number, status: o.status, total: Number(o.total) || 0, currency: o.currency, date: o.date_created, items: (o.line_items || []).map((i) => `${i.quantity}x ${i.name}`).join('; ').slice(0, 300) }));
+}

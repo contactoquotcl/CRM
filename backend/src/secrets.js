@@ -47,6 +47,7 @@ export const GROUPS = [
     help: '',
     fields: [
       { key: 'CRM_PUBLIC_URL', label: 'URL pública del CRM (frontend)', type: 'url', placeholder: 'https://crm-ten-mu-45.vercel.app', help: 'Se usa para los enlaces "Abrir en el CRM" dentro de Chatwoot.' },
+      { key: 'API_PUBLIC_URL', label: 'URL pública de esta API', type: 'url', placeholder: 'https://quot-crm-api.onrender.com', help: 'Se usa en el enlace al PDF de las cotizaciones del bot. En Render se detecta sola; solo cámbiala si usas un dominio propio.' },
       { key: 'CHATBOT_ALLOWED_ORIGINS', label: 'Sitios donde puede cargarse el chat', placeholder: 'https://quot.cl,https://www.quot.cl', help: 'Separados por coma.' },
     ],
   },

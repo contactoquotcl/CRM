@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import { query } from '../db.js';
-import { botConfig, chatbotTokenSecret, wcConfig } from '../config.js';
+import { botConfig, chatbotTokenSecret, wcConfig, apiPublicUrl } from '../config.js';
 import { HttpError, formatRut, validRut } from '../util.js';
 import { norm } from '../catalog.js';
 import { callLLM as callClaude, llmEnabled } from './llm.js';
@@ -78,6 +78,13 @@ async function saveContact(session, set) {
   if (!keys.length) return;
   await query(`UPDATE chat_sessions SET ${keys.map((k, i) => `${k}=$${i + 2}`).join(', ')} WHERE id=$1`, [session.id, ...keys.map((k) => set[k])]);
   Object.assign(session, Object.fromEntries(keys.map((k) => [k, set[k]])));
+  // Los datos también quedan visibles en la bandeja antes de derivar (panel del cliente)
+  if (session.conversation_id) {
+    await query(
+      'UPDATE conversations SET contact_name=$2, contact_email=$3, contact_phone=$4, contact_rut=$5, contact_company=$6 WHERE id=$1',
+      [session.conversation_id, session.customer_name, session.customer_email, session.customer_phone, session.customer_rut, session.customer_company]
+    ).catch((e) => console.warn('[chatbot] no se pudo actualizar el contacto de la conversación:', e.message));
+  }
 }
 
 // ------------------------------------------------------------------ guardas de salida
@@ -95,7 +102,7 @@ function collectPrices(obj, set) {
   if (Array.isArray(obj)) return obj.forEach((x) => collectPrices(x, set));
   if (obj && typeof obj === 'object') {
     for (const [k, v] of Object.entries(obj)) {
-      if (k.startsWith('precio') && typeof v === 'number') set.add(v);
+      if (/^(precio|subtotal|iva|total)/.test(k) && typeof v === 'number') set.add(v);
       else collectPrices(v, set);
     }
   }
@@ -110,8 +117,14 @@ function allowedHosts() {
 /** Quita enlaces a dominios no autorizados (mitiga inyecciones que intentan enviar al cliente a sitios externos). */
 export function sanitizeUrls(text) {
   const hosts = allowedHosts();
+  let apiHost = '';
+  try { apiHost = apiPublicUrl() ? new URL(apiPublicUrl()).hostname : ''; } catch { /* ignorar */ }
   return text.replace(/https?:\/\/[^\s)>\]]+/gi, (u) => {
-    try { return hosts.has(new URL(u).hostname) ? u : '(enlace removido)'; } catch { return '(enlace removido)'; }
+    try {
+      const url = new URL(u);
+      // De la API propia solo se permite el enlace al PDF de la cotización
+      return hosts.has(url.hostname) || (apiHost && url.hostname === apiHost && url.pathname === '/api/chatbot/quote-pdf') ? u : '(enlace removido)';
+    } catch { return '(enlace removido)'; }
   });
 }
 
@@ -183,6 +196,7 @@ export async function handleUserMessage(session, rawText) {
   let reply = '';
   const ctx = {
     session,
+    saveContact: (set) => saveContact(session, set),
     handoff: async (args) => {
       await saveContact(session, { customer_company: args.razon_social, customer_name: args.nombre, customer_email: args.correo, customer_phone: args.telefono, customer_rut: args.rut });
       const r = await performHandoff(session, { motivo: args.motivo, resumen: args.resumen });

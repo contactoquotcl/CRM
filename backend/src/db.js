@@ -110,6 +110,10 @@ const DEFAULT_SETTINGS = {
   iva_rate: '19',
   chatbot_enabled: '1',
   spam_detection: '1',
+  bot_default_margin: '25',
+  bot_price_source: 'woocommerce',
+  bot_quote_handoff_clp: '5000000',
+  woo_cart_plugin: '0',
   bank_holder: 'Quot Marketplace Logístico SPA',
   bank_rut: '77372977-8',
   bank_name: 'Mercado Pago',
@@ -179,6 +183,8 @@ export async function initDb() {
   await impl.exec(`
     ALTER TABLE quotes ADD COLUMN IF NOT EXISTS margin_pct DOUBLE PRECISION NOT NULL DEFAULT 0;
     ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS cost INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE quotes ADD COLUMN IF NOT EXISTS channel TEXT NOT NULL DEFAULT 'Cotizador';
+    ALTER TABLE quotes ADD COLUMN IF NOT EXISTS conversation_id INTEGER;
     ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS margin_pct DOUBLE PRECISION NOT NULL DEFAULT 0;
     ALTER TABLE leads ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0;
   `);
@@ -289,6 +295,17 @@ export async function initDb() {
       is_private BOOLEAN NOT NULL DEFAULT FALSE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
+    CREATE TABLE IF NOT EXISTS carts (
+      id SERIAL PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      conversation_id INTEGER,
+      items TEXT NOT NULL DEFAULT '[]',
+      subtotal INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'active',
+      quote_id INTEGER,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS carts_session_idx ON carts(session_id, id);
     CREATE INDEX IF NOT EXISTS conv_messages_conv_idx ON conversation_messages(conversation_id, id);
 
     ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS customer_company TEXT NOT NULL DEFAULT '';

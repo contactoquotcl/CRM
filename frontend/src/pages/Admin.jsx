@@ -231,6 +231,7 @@ function Chatbot() {
   const [status, setStatus] = useState(null);
   const [enabled, setEnabled] = useState(true);
   const [spam, setSpam] = useState(true);
+  const [bq, setBq] = useState({ bot_default_margin: '25', bot_price_source: 'woocommerce', bot_quote_handoff_clp: '5000000', woo_cart_plugin: '0' });
   const [msg, setMsg] = useState('');
   const [error, setError] = useState('');
   const load = useCallback(async () => {
@@ -239,6 +240,7 @@ function Chatbot() {
       setStatus(st);
       setEnabled(s.chatbot_enabled !== '0');
       setSpam(s.spam_detection !== '0');
+      setBq((b) => Object.fromEntries(Object.keys(b).map((k) => [k, s[k] ?? b[k]])));
     } catch (e) { setError(e.message); }
   }, []);
   useEffect(() => { load(); }, [load]);
@@ -251,6 +253,16 @@ function Chatbot() {
     setError('');
     try { await api.put('/api/settings', { spam_detection: v ? '1' : '0' }); setSpam(v); } catch (e) { setError(e.message); }
   };
+  const saveBq = async () => {
+    setError(''); setMsg('');
+    try {
+      const m = Number(String(bq.bot_default_margin).replace(',', '.'));
+      if (!(m >= 0 && m < 100)) throw new Error('El margen por defecto debe estar entre 0 y 99,99');
+      if (!(Number(bq.bot_quote_handoff_clp) >= 0)) throw new Error('El umbral de derivación debe ser un monto en pesos (0 = nunca derivar por monto)');
+      await api.put('/api/settings', { ...bq, bot_default_margin: String(m), bot_quote_handoff_clp: String(Math.round(Number(bq.bot_quote_handoff_clp))) });
+      setMsg('Ajustes de cotizaciones del bot guardados.');
+    } catch (e) { setError(e.message); }
+  };
   const sync = async () => {
     setError(''); setMsg('');
     try { await api.post('/api/catalog/sync'); setMsg('Sincronización iniciada. Actualiza en unos segundos.'); setTimeout(load, 4000); } catch (e) { setError(e.message); }
@@ -262,6 +274,23 @@ function Chatbot() {
       <Alert kind="ok">{msg}</Alert>
       <label className="check"><input type="checkbox" checked={enabled} onChange={(e) => toggle(e.target.checked)} /> Chatbot activo en el sitio (si lo apagas, el widget deja de crear conversaciones nuevas)</label>
       <label className="check"><input type="checkbox" checked={spam} onChange={(e) => toggleSpam(e.target.checked)} /> Detectar spam y derivarlo a un ejecutivo (enlaces masivos, textos de casino/cripto, mensajes repetidos, texto sin sentido, ráfagas). Queda con la etiqueta «posible_spam», sin asignar y sin crear lead.</label>
+      <h3>Cotizaciones y carritos del bot</h3>
+      <div className="grid2" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
+        <Field label="Precio de las cotizaciones del bot" hint="«Precio de la tienda»: usa el precio en vivo de WooCommerce (lo mismo que el bot le dijo al cliente). «Costo + margen»: costo de la maestra de productos / (1 − margen) cuando el SKU existe en la maestra.">
+          <select value={bq.bot_price_source} onChange={(e) => setBq({ ...bq, bot_price_source: e.target.value })}>
+            <option value="woocommerce">Precio de la tienda (WooCommerce)</option>
+            <option value="margen">Costo de la maestra + margen por defecto</option>
+          </select>
+        </Field>
+        <Field label="Margen por defecto del bot (%)" hint="Sobre la venta. Se usa en modo «Costo + margen» y para estimar el costo de SKU que no están en la maestra. El bot no negocia descuentos.">
+          <input value={bq.bot_default_margin} onChange={(e) => setBq({ ...bq, bot_default_margin: e.target.value })} inputMode="decimal" />
+        </Field>
+        <Field label="Derivar a ejecutivo si la cotización supera (CLP, con IVA)" hint="La cotización se genera igual y además se deriva para seguimiento. 0 = no derivar por monto.">
+          <input value={bq.bot_quote_handoff_clp} onChange={(e) => setBq({ ...bq, bot_quote_handoff_clp: e.target.value })} inputMode="numeric" />
+        </Field>
+      </div>
+      <label className="check"><input type="checkbox" checked={bq.woo_cart_plugin === '1'} onChange={(e) => setBq({ ...bq, woo_cart_plugin: e.target.checked ? '1' : '0' })} /> Ya instalé en WordPress el fragmento «Carrito Quot» (permite un solo enlace de pago con varios productos; ver docs/INTEGRACIONES.md)</label>
+      <div><button className="btn" onClick={saveBq}>Guardar ajustes de cotizaciones</button></div>
       <h3>Catálogo WooCommerce</h3>
       {status && (
         <p>

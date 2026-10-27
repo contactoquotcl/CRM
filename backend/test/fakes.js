@@ -36,6 +36,7 @@ export async function startFakes({ pageSize = 5 } = {}) {
       const live = (pr) => ({ ...pr, ...(state.wooLive[pr.id] || {}) });
       const rest = p.slice('/wp-json/wc/v3'.length);
       let m;
+      if (rest.startsWith('/orders')) return json(res, 200, state.wooOrders || []);
       if (rest === '/products') {
         const sku = url.searchParams.get('sku');
         if (sku) return json(res, 200, state.wooProducts.filter((x) => x.sku === sku).map(live));
@@ -109,10 +110,23 @@ export function ruleBasedLlm(body) {
       return first ? llmTool('ver_producto', { sku: first.sku }) : llmText('No encontré productos con esa búsqueda. ¿Quieres que te derive con un ejecutivo?');
     }
     if (r.sku && r.precio_neto) return llmText(`${r.nombre} (SKU ${r.sku}): $${r.precio_neto.toLocaleString('es-CL')} neto + IVA, ${r.disponibilidad}. ${r.link}`);
+    if (r.link_checkout || r.links_por_producto) return llmText(`Tu carrito suma $${r.total_con_iva.toLocaleString('es-CL')} con IVA. Paga aquí: ${r.link_checkout || r.links_por_producto[0].link_agregar}`);
+    if (r.numero_cotizacion) return llmText(`Listo: cotización N° ${r.numero_cotizacion} por $${r.total_con_iva.toLocaleString('es-CL')} con IVA, válida ${r.validez_dias} días. Entrega: ${r.plazo_entrega}.${r.link_pdf ? ' PDF: ' + r.link_pdf : ''}`);
+    if (/sin stock/.test(String(r.error))) return llmText('Ese producto está sin stock por ahora. ¿Quieres que te derive con un ejecutivo?');
+    if (/falta pedir/.test(String(r.error))) return llmText('Para cotizar necesito el RUT de la empresa, razón social, nombre de contacto, correo y teléfono.');
     if (r.derivado) return llmText('Listo, un ejecutivo te responderá por este chat.');
     return llmText('Prefiero derivarte con un ejecutivo para esto.');
   }
   const text = (typeof last.content === 'string' ? last.content : '').toLowerCase();
+  const sku = text.match(/\b([a-z0-9]+-[a-z0-9-]+)\b/i)?.[1]?.toUpperCase();
+  const qty = Number(text.match(/(\d+)\s*(rollos|unidades|impresoras|etiquetas)?/)?.[1]) || 1;
+  if (/link de pago|quiero comprar/.test(text) && sku) return llmTool('armar_carrito', { items: [{ sku, cantidad: qty }] });
+  if (/cotiz/.test(text)) {
+    const rut = text.match(/rut\s*:?\s*([0-9.]+-[0-9k])/i)?.[1];
+    const cliente = rut ? { rut, razon_social: text.match(/raz[oó]n social\s*:?\s*([^,.]+)/i)?.[1]?.trim() || '', nombre: text.match(/contacto\s*:?\s*([^,.]+)/i)?.[1]?.trim() || '', correo: text.match(/[\w.]+@[\w.]+\.\w+/)?.[0] || '', telefono: text.match(/\+56[\d\s]+\d/)?.[0] || '' } : null;
+    if (cliente && sku) return llmTool('generar_cotizacion', { cliente, items: [{ sku, cantidad: qty }] });
+    if (!rut) return llmText('Con gusto te cotizo. Para generar la cotización necesito el RUT de la empresa, razón social, nombre de contacto, correo y teléfono.');
+  }
   if (/(etiqueta|impresora|lector|stretch|zebra)/.test(text)) return llmTool('buscar_productos', { query: text.slice(0, 100) });
   if (/cotiz/.test(text)) return llmTool('derivar_ejecutivo', { motivo: 'cotizacion', resumen: text.slice(0, 300) });
   return llmText('Soy el asistente de Quot. Puedo ayudarte con productos Zebra, etiquetas, lectores y stretch film.');

@@ -3,7 +3,7 @@
 import { query } from './db.js';
 import { crmPublicUrl } from './config.js';
 import * as cw from './chatwoot.js';
-import { HttpError, formatRut, today, validRut } from './util.js';
+import { HttpError, formatRut, today, validRut, clp } from './util.js';
 import { hashPassword } from './auth.js';
 import crypto from 'node:crypto';
 
@@ -162,12 +162,23 @@ export async function handoff(session, { motivo = 'otro', resumen = '', transcri
     [conv.id, agent?.id ?? null, leadId, `${motivo}: ${resumen}`.slice(0, 500), session.customer_name, session.customer_email, session.customer_phone, session.customer_rut, session.customer_company, spam]
   );
 
+  // Carrito y cotización de esta conversación para la nota del ejecutivo
+  const cartRow = (await query("SELECT items, subtotal, status, quote_id FROM carts WHERE session_id=$1 ORDER BY id DESC LIMIT 1", [session.id])).rows[0];
+  const quoteRow = (await query('SELECT number, total FROM quotes WHERE conversation_id=$1 ORDER BY id DESC LIMIT 1', [conv.id])).rows[0];
+  let cartLine = '';
+  if (cartRow) {
+    let its = [];
+    try { its = JSON.parse(cartRow.items); } catch { /* ignorar */ }
+    cartLine = `Carrito: ${its.map((i) => `${i.cantidad}x ${i.sku}`).join(', ') || '(vacío)'} · subtotal neto ${clp(cartRow.subtotal)}${cartRow.status === 'quoted' ? ' (cotizado)' : ''}`;
+  }
   const base = crmPublicUrl();
   const lines = [
     spam ? '⚠️ Posible spam detectado por el chatbot' : '🤖➜👤 Derivación desde el chatbot',
     `Motivo: ${motivo}`,
     `Resumen: ${resumen || '(sin resumen)'}`,
     `Cliente: ${[session.customer_company, session.customer_rut && `RUT ${session.customer_rut}`, session.customer_name && `Contacto: ${session.customer_name}`, session.customer_email, session.customer_phone].filter(Boolean).join(' · ') || '(sin datos de contacto)'}`,
+    cartLine,
+    quoteRow ? `Cotización generada: N° ${quoteRow.number} por ${clp(quoteRow.total)} con IVA` : '',
     transcript.length ? '\nÚltimos mensajes:\n' + transcript.map((m) => `${m.role === 'user' ? 'Cliente' : 'Bot'}: ${preview(m.content)}`).join('\n') : '',
     base ? `\nCRM: ${base}/conversaciones?c=${conv.id}` : '',
   ].filter(Boolean);

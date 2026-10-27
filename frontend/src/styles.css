@@ -173,7 +173,7 @@ table.items td.num { padding-top: 14px; }
 
 /* conversaciones */
 .nav-badge { background: #dc2626; color: #fff; border-radius: 999px; font-size: 11px; padding: 0 6px; margin-left: 6px; font-weight: 700; }
-.inbox { display: grid; grid-template-columns: 340px 1fr; gap: 14px; height: calc(100vh - 54px - 40px); min-height: 480px; }
+.inbox { display: grid; grid-template-columns: 340px 1fr 300px; gap: 14px; height: calc(100vh - 54px - 40px); min-height: 480px; }
 .inbox-list, .inbox-chat { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); display: flex; flex-direction: column; min-height: 0; }
 .inbox-head { padding: 12px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
 .inbox-head .search { min-width: 0; width: 100%; }
@@ -194,4 +194,9 @@ table.items td.num { padding-top: 14px; }
 .bubble.note { align-self: center; max-width: 90%; background: #fef9c3; border: 1px dashed #ca8a04; }
 .chat-compose { border-top: 1px solid var(--line); padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
 .chat-compose textarea.is-note { background: #fefce8; border-color: #ca8a04; }
+@media (max-width: 1280px) { .inbox { grid-template-columns: 300px 1fr 260px; } }
+.inbox-side { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.inbox-side h3, .inbox-side h4 { margin: 0; }
+.inbox-side h4 { font-size: 13px; margin-bottom: 4px; }
+.side-block { display: flex; flex-direction: column; gap: 4px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
 @media (max-width: 900px) { .inbox { grid-template-columns: 1fr; height: auto; } .inbox-rows { max-height: 260px; } .inbox-chat { min-height: 480px; } }

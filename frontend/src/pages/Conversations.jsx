@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { Alert, Badge } from '../ui.jsx';
+import { clp } from '../util.js';
 
 const FILTERS = [
   ['all', 'Todas'],
@@ -23,6 +24,8 @@ const when = (iso) => {
 
 export default function Conversations() {
   const { user, isAdmin } = useAuth();
+  const navigate = useNavigate();
+  const [panel, setPanel] = useState(null);
   const [params, setParams] = useSearchParams();
   const selected = Number(params.get('c')) || null;
   const [filter, setFilter] = useState('all');
@@ -55,6 +58,16 @@ export default function Conversations() {
   useEffect(() => { const t = setTimeout(loadList, q ? 250 : 0); return () => clearTimeout(t); }, [loadList, q]);
   useEffect(() => { const t = setInterval(loadList, 5000); return () => clearInterval(t); }, [loadList]);
   useEffect(() => { lastCount.current = 0; loadDetail(); }, [loadDetail]);
+  const loadPanel = useCallback(async () => {
+    if (!selected) { setPanel(null); return; }
+    try { setPanel(await api.get(`/api/conversations/${selected}/customer`)); } catch { setPanel(null); }
+  }, [selected]);
+  useEffect(() => { setPanel(null); loadPanel(); const t = setInterval(loadPanel, 15000); return () => clearInterval(t); }, [loadPanel]);
+  const quoteFromConversation = () => {
+    navigate(conv.lead_id ? `/cotizador?lead=${conv.lead_id}` : '/cotizador', {
+      state: { fromConversation: { contact: panel?.contact || {}, items: (panel?.cart?.items || []).map((i) => ({ sku: i.sku, nombre: i.nombre, cantidad: i.cantidad, unit_net: i.unit_net })) } },
+    });
+  };
   useEffect(() => { if (!selected) return undefined; const t = setInterval(loadDetail, 4000); return () => clearInterval(t); }, [selected, loadDetail]);
   useEffect(() => {
     const n = detail?.messages?.length || 0;
@@ -179,6 +192,53 @@ export default function Conversations() {
           </>
         )}
       </section>
+      {conv && (
+        <aside className="inbox-side">
+          <h3>Cliente</h3>
+          <div className="side-block">
+            <strong>{panel?.contact?.company || conv.contact_company || conv.contact_name || conv.contact_email || 'Visitante'}</strong>
+            {[['RUT', panel?.contact?.rut], ['Contacto', panel?.contact?.name], ['Correo', panel?.contact?.email], ['Teléfono', panel?.contact?.phone]].filter(([, v]) => v).map(([k, v]) => (
+              <div key={k} className="muted small">{k}: {v}</div>
+            ))}
+          </div>
+          <button className="btn primary" onClick={quoteFromConversation} disabled={!panel}>Generar cotización desde esta conversación</button>
+
+          {panel?.cart && (
+            <div className="side-block">
+              <h4>Carrito del bot {panel.cart.status === 'quoted' && <Badge color="#16a34a">cotizado</Badge>}</h4>
+              {panel.cart.items.map((i) => <div key={i.sku} className="small">{i.cantidad}× {i.nombre} <span className="muted">({i.sku})</span></div>)}
+              <div className="muted small">Subtotal neto {clp(panel.cart.subtotal)}</div>
+            </div>
+          )}
+
+          <div className="side-block">
+            <h4>Cotizaciones ({panel?.quotes?.length ?? 0})</h4>
+            {(panel?.quotes || []).map((qt) => (
+              <div key={qt.id} className="row between small">
+                <span>N° {qt.number} · {clp(qt.total)} <span className="muted">· {qt.channel}</span></span>
+                <button className="btn small" onClick={() => api.openPdf(qt.id).catch((e) => setError(e.message))}>PDF</button>
+              </div>
+            ))}
+            {panel && !panel.quotes.length && <div className="muted small">Sin cotizaciones.</div>}
+          </div>
+
+          <div className="side-block">
+            <h4>Leads ({panel?.leads?.length ?? 0})</h4>
+            {(panel?.leads || []).map((l) => <div key={l.id} className="small">{l.client_name} · <Badge color="#2563eb">{l.state_name || '—'}</Badge> <span className="muted">{l.channel}</span></div>)}
+            {panel && !panel.leads.length && <div className="muted small">Sin leads.</div>}
+          </div>
+
+          <div className="side-block">
+            <h4>Compras en WooCommerce</h4>
+            {panel?.purchases_error && <div className="muted small">{panel.purchases_error}</div>}
+            {panel?.purchases?.map((o) => (
+              <div key={o.id} className="small">#{o.number} · {clp(o.total)} · {o.status}<div className="muted">{new Date(o.date).toLocaleDateString('es-CL')} — {o.items}</div></div>
+            ))}
+            {panel?.purchases && !panel.purchases.length && <div className="muted small">Sin compras con este correo.</div>}
+            {panel && panel.purchases === null && !panel.purchases_error && <div className="muted small">Se muestran cuando el cliente entrega su correo.</div>}
+          </div>
+        </aside>
+      )}
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { query } from '../db.js';
 import { searchCatalog, priceInfo, wcToRow } from '../catalog.js';
 import { wcEnabled, wcGetProduct, wcFindBySku, wcVariations } from '../woo.js';
 import { formatRut, validRut } from '../util.js';
+import { armarCarrito, generarCotizacion } from './commerce.js';
 
 export const TOOLS = [
   {
@@ -48,6 +49,41 @@ export const TOOLS = [
       required: ['motivo', 'resumen'],
     },
   },
+  {
+    name: 'armar_carrito',
+    description: 'Arma el carrito del cliente con productos y cantidades (verifica precio y stock en vivo) y entrega el enlace de checkout de la tienda para que pague en línea. Los totales los calcula el sistema.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          description: 'Productos del carrito',
+          items: { type: 'object', properties: { sku: { type: 'string' }, id: { type: 'integer' }, cantidad: { type: 'integer', description: 'Unidades (entero ≥ 1)' } }, required: ['cantidad'] },
+        },
+      },
+      required: ['items'],
+    },
+  },
+  {
+    name: 'generar_cotizacion',
+    description: 'Genera una cotización formal (con número, PDF y datos de transferencia) para una empresa. Solo úsala cuando ya tengas los 5 datos del cliente (RUT de la empresa, razón social, nombre de contacto, correo y teléfono) y el cliente haya confirmado productos y cantidades. No hay descuentos ni márgenes que negociar.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        cliente: {
+          type: 'object',
+          properties: { rut: { type: 'string', description: 'RUT de la empresa' }, razon_social: { type: 'string' }, nombre: { type: 'string', description: 'Nombre de la persona de contacto' }, correo: { type: 'string' }, telefono: { type: 'string' } },
+          required: ['rut', 'razon_social', 'nombre', 'correo', 'telefono'],
+        },
+        items: {
+          type: 'array',
+          items: { type: 'object', properties: { sku: { type: 'string' }, id: { type: 'integer' }, cantidad: { type: 'integer' } }, required: ['cantidad'] },
+        },
+        notas: { type: 'string', description: 'Observación opcional del cliente para la cotización (máx. 300 caracteres)' },
+      },
+      required: ['cliente', 'items'],
+    },
+  },
 ];
 
 const MOTIVOS = ['cliente_solicita', 'cotizacion', 'reclamo', 'consulta_tecnica', 'otro'];
@@ -84,6 +120,29 @@ export function validateArgs(name, input) {
     if (rut && !validRut(rut)) return { ok: false, error: 'El RUT no es válido (dígito verificador): pídeselo de nuevo al cliente (o no lo incluyas)' };
     Object.assign(out, { razon_social: str(a.razon_social, 160), nombre: str(a.nombre, 120), correo, telefono: tel, rut: rut ? formatRut(rut) : '' });
     return { ok: true, args: out };
+  }
+  if (name === 'armar_carrito' || name === 'generar_cotizacion') {
+    const rawItems = Array.isArray(a.items) ? a.items.slice(0, 50) : [];
+    const items = [];
+    for (const it of rawItems) {
+      const o = it && typeof it === 'object' ? it : {};
+      const cantidad = optInt(o.cantidad);
+      const sku = str(o.sku, 80);
+      const id = optInt(o.id);
+      if (Number.isNaN(cantidad) || cantidad === undefined) return { ok: false, error: 'Cada producto necesita una cantidad entera' };
+      if (!sku && !(id > 0)) return { ok: false, error: 'Cada producto necesita sku o id (los entrega buscar_productos)' };
+      items.push({ sku: sku || undefined, id: id > 0 ? id : undefined, cantidad });
+    }
+    if (!items.length) return { ok: false, error: 'Indica al menos un producto' };
+    if (name === 'armar_carrito') return { ok: true, args: { items } };
+    const c = a.cliente && typeof a.cliente === 'object' ? a.cliente : {};
+    const correo = str(c.correo, 254);
+    if (correo && !EMAIL.test(correo)) return { ok: false, error: 'El correo no es válido: pídeselo de nuevo al cliente' };
+    const tel = str(c.telefono, 20);
+    if (tel && !PHONE.test(tel)) return { ok: false, error: 'El teléfono no es válido: pídeselo de nuevo al cliente' };
+    const rut = str(c.rut, 14);
+    if (rut && !validRut(rut)) return { ok: false, error: 'El RUT no es válido (dígito verificador): pídeselo de nuevo al cliente' };
+    return { ok: true, args: { items, notas: str(a.notas, 300), cliente: { rut: rut ? formatRut(rut) : '', razon_social: str(c.razon_social, 160), nombre: str(c.nombre, 120), correo, telefono: tel } } };
   }
   return { ok: false, error: `Herramienta desconocida: ${name}` };
 }
@@ -149,6 +208,8 @@ export async function runTool(name, args, ctx) {
     if (p.type === 'variable') variants = await wcVariations(p.id).catch(() => []);
     return { ok: true, ...productCard(p, variants) };
   }
+  if (name === 'armar_carrito') return armarCarrito(args, ctx);
+  if (name === 'generar_cotizacion') return generarCotizacion(args, ctx);
   if (name === 'derivar_ejecutivo') {
     const r = await ctx.handoff(args);
     return { ok: true, derivado: true, instruccion: 'Informa al cliente, en una o dos frases, que un ejecutivo de Quot le responderá por este mismo chat.', asignado: !!r.assignee };
