@@ -7,6 +7,7 @@ import { norm } from '../catalog.js';
 import { callLLM as callClaude, llmEnabled } from './llm.js';
 import { TOOLS, runTool, validateArgs } from './tools.js';
 import { systemPrompt } from './prompt.js';
+import { detectSpam, spamEnabled } from './spam.js';
 import { handoff as doHandoffInbox, mirrorMessage, setConversationStatus, getConversation } from '../inbox.js';
 
 export const WELCOME = '¡Hola! Soy el asistente virtual de Quot. Puedo ayudarte a encontrar productos (etiquetas, impresoras Zebra, lectores, stretch film y más), revisar precios y stock, o conectarte con un ejecutivo. ¿En qué te ayudo?';
@@ -120,8 +121,8 @@ async function transcript(sessionId, n = 8) {
   return rows.reverse();
 }
 
-async function performHandoff(session, { motivo, resumen }) {
-  return doHandoffInbox(session, { motivo, resumen, transcript: await transcript(session.id) });
+async function performHandoff(session, { motivo, resumen, spam = false }) {
+  return doHandoffInbox(session, { motivo, resumen, spam, transcript: await transcript(session.id) });
 }
 
 async function say(session, text) {
@@ -129,8 +130,8 @@ async function say(session, text) {
   await mirrorMessage(session, 'assistant', text).catch((e) => console.warn('[chatbot] espejo del mensaje del bot falló:', e.message));
 }
 
-async function handoffTurn(session, motivo, resumen, reply = HANDOFF_REPLY) {
-  await performHandoff(session, { motivo, resumen });
+async function handoffTurn(session, motivo, resumen, reply = HANDOFF_REPLY, spam = false) {
+  await performHandoff(session, { motivo, resumen, spam });
   await say(session, reply);
   return { replies: [{ role: 'assistant', content: reply }], status: 'handoff', handoff: true };
 }
@@ -157,6 +158,10 @@ export async function handleUserMessage(session, rawText) {
 
   const n = norm(text);
   if (wantsHuman(n)) return handoffTurn(session, 'cliente_solicita', 'El cliente pidió hablar con un ejecutivo.');
+  if (await spamEnabled()) {
+    const why = await detectSpam(session, text);
+    if (why) return handoffTurn(session, 'posible_spam', `Posible spam: ${why}. Revisa y, si es spam, resuelve la conversación.`, 'Recibí tu mensaje. Lo derivé a un ejecutivo de Quot, que te responderá por aquí si corresponde.', true);
+  }
   if (frustrated(text, n)) return handoffTurn(session, 'frustracion', 'Se detectó frustración o molestia en el mensaje del cliente.', 'Lamento la molestia. Te derivé de inmediato con un ejecutivo de Quot para que te atienda personalmente por este chat.');
   if (!llmEnabled()) return handoffTurn(session, 'otro', 'El asistente de IA no está configurado; atención directa.', 'Ahora mismo no puedo responder automáticamente, pero ya avisé a un ejecutivo de Quot: te responderá por este chat.');
 

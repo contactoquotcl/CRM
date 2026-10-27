@@ -230,6 +230,7 @@ function Settings() {
 function Chatbot() {
   const [status, setStatus] = useState(null);
   const [enabled, setEnabled] = useState(true);
+  const [spam, setSpam] = useState(true);
   const [msg, setMsg] = useState('');
   const [error, setError] = useState('');
   const load = useCallback(async () => {
@@ -237,6 +238,7 @@ function Chatbot() {
       const [st, s] = await Promise.all([api.get('/api/catalog/status'), api.get('/api/settings')]);
       setStatus(st);
       setEnabled(s.chatbot_enabled !== '0');
+      setSpam(s.spam_detection !== '0');
     } catch (e) { setError(e.message); }
   }, []);
   useEffect(() => { load(); }, [load]);
@@ -244,6 +246,10 @@ function Chatbot() {
   const toggle = async (v) => {
     setError('');
     try { await api.put('/api/settings', { chatbot_enabled: v ? '1' : '0' }); setEnabled(v); } catch (e) { setError(e.message); }
+  };
+  const toggleSpam = async (v) => {
+    setError('');
+    try { await api.put('/api/settings', { spam_detection: v ? '1' : '0' }); setSpam(v); } catch (e) { setError(e.message); }
   };
   const sync = async () => {
     setError(''); setMsg('');
@@ -255,6 +261,7 @@ function Chatbot() {
       <Alert>{error}</Alert>
       <Alert kind="ok">{msg}</Alert>
       <label className="check"><input type="checkbox" checked={enabled} onChange={(e) => toggle(e.target.checked)} /> Chatbot activo en el sitio (si lo apagas, el widget deja de crear conversaciones nuevas)</label>
+      <label className="check"><input type="checkbox" checked={spam} onChange={(e) => toggleSpam(e.target.checked)} /> Detectar spam y derivarlo a un ejecutivo (enlaces masivos, textos de casino/cripto, mensajes repetidos, texto sin sentido, ráfagas). Queda con la etiqueta «posible_spam», sin asignar y sin crear lead.</label>
       <h3>Catálogo WooCommerce</h3>
       {status && (
         <p>

@@ -109,6 +109,7 @@ const DEFAULT_SETTINGS = {
   company_web: 'www.quot.cl',
   iva_rate: '19',
   chatbot_enabled: '1',
+  spam_detection: '1',
   bank_holder: 'Quot Marketplace Logístico SPA',
   bank_rut: '77372977-8',
   bank_name: 'Mercado Pago',

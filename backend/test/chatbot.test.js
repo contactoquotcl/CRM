@@ -243,6 +243,39 @@ test('chatbot: datos del cliente (RUT empresa, razón social, contacto, correo, 
   assert.match(sys, /RUT de la empresa, razón social, nombre de contacto, correo y teléfono/);
 });
 
+test('spam: se detecta sin pasar por la IA, se deriva sin asignar y sin lead; clientes normales no se afectan', async () => {
+  F.llmRequests.length = 0;
+  // 1) texto típico de spam
+  const t1 = await newSession();
+  const r1 = await say(t1, 'Gana dinero facil con casino online www.a.com');
+  assert.equal(r1.data.handoff, true);
+  assert.equal(F.llmRequests.length, 0, 'no se gastó IA');
+  const c1 = (await convOf(t1)).conversation;
+  assert.match(c1.labels, /posible_spam/);
+  assert.equal(c1.assignee_id, null);
+  assert.equal(c1.lead_id, null);
+  // 2) mismo mensaje 3 veces, 3) texto sin sentido, 4) 3 enlaces
+  const t2 = await newSession();
+  F.llmQueue = [llmText('Hola'), llmText('Hola'), llmText('Hola')];
+  await say(t2, 'comprar ahora ya'); await say(t2, 'comprar ahora ya');
+  assert.equal((await say(t2, 'comprar ahora ya')).data.handoff, true);
+  const t3 = await newSession();
+  assert.equal((await say(t3, 'sdfghjklñqwrtypzxcvbnmsdfg')).data.handoff, true);
+  const t4 = await newSession();
+  assert.equal((await say(t4, 'mira http://a.cl http://b.cl http://c.cl')).data.handoff, true);
+  // 5) cliente normal: medidas, SKU y un solo enlace no son spam
+  F.llmQueue = [llmText('Claro, ¿para qué impresora?'), llmText('Perfecto.')];
+  const t5 = await newSession();
+  assert.equal((await say(t5, 'etiquetas térmicas 150x100 para ZD421, SKU ETQ-100X150-TD')).data.handoff, false);
+  assert.equal((await say(t5, 'es este producto https://quot.cl/producto/zd421')).data.handoff, false);
+  // 6) apagado desde Admin
+  await api('PUT', '/api/settings', { token: admin, body: { spam_detection: '0' } });
+  F.llmQueue = [llmText('ok')];
+  const t6 = await newSession();
+  assert.equal((await say(t6, 'Gana dinero facil con casino online')).data.handoff, false);
+  await api('PUT', '/api/settings', { token: admin, body: { spam_detection: '1' } });
+});
+
 test('chatbot: validación estricta de argumentos y degradación sin WooCommerce ni IA', async () => {
   const token = await newSession();
   F.llmRequests.length = 0;
