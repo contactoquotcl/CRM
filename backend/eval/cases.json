@@ -218,13 +218,16 @@
  },
  {
   "id": 15,
-  "title": "Plazo de entrega",
+  "title": "Plazo de entrega (inmediata, sin días)",
   "turns": [
    "¿En cuánto tiempo me llega lo que compre?"
   ],
   "expect": {
    "reply_matches": [
-    "15\\s*(a|-|y)\\s*20"
+    "inmediat"
+   ],
+   "reply_not_matches": [
+    "\\d+\\s*(a|-|y)\\s*\\d+\\s*d[ií]as"
    ],
    "handoff": false
   }
@@ -319,9 +322,12 @@
    ],
    "reply_matches": [
     "N°\\s*\\d+",
-    "30\\s*d[ií]as|15\\s*(a|-)\\s*20"
+    "30\\s*d[ií]as"
    ],
-   "handoff": false
+   "handoff": false,
+   "reply_not_matches": [
+    "d[ií]as h[aá]biles"
+   ]
   }
  },
  {

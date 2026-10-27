@@ -65,7 +65,7 @@ export const botConfig = () => ({
   sessionsPerIpHour: num('BOT_SESSIONS_PER_IP_HOUR', 20),
   // Reglas comerciales (una sola fuente de verdad; se inyectan al prompt y las usa el cotizador del bot en la Fase 2)
   validityDays: num('BOT_QUOTE_VALIDITY_DAYS', 30),
-  deliveryText: e('BOT_DELIVERY_TEXT', '15 a 20 días hábiles después de confirmado el pago'),
+  deliveryText: e('BOT_DELIVERY_TEXT', 'inmediata'),
   shippingText: e('BOT_SHIPPING_TEXT', 'Despacho gratis en la Región Metropolitana; en otras regiones el despacho es por cuenta del comprador'),
   minOrderClp: num('BOT_MIN_ORDER_CLP', 0),
   maxCartClp: num('BOT_MAX_CART_CLP', 100000000),

@@ -111,7 +111,7 @@ export function ruleBasedLlm(body) {
     }
     if (r.sku && r.precio_neto) return llmText(`${r.nombre} (SKU ${r.sku}): $${r.precio_neto.toLocaleString('es-CL')} neto + IVA, ${r.disponibilidad}. ${r.link}`);
     if (r.link_checkout || r.links_por_producto) return llmText(`Tu carrito suma $${r.total_con_iva.toLocaleString('es-CL')} con IVA. Paga aquí: ${r.link_checkout || r.links_por_producto[0].link_agregar}`);
-    if (r.numero_cotizacion) return llmText(`Listo: cotización N° ${r.numero_cotizacion} por $${r.total_con_iva.toLocaleString('es-CL')} con IVA, válida ${r.validez_dias} días. Entrega: ${r.plazo_entrega}.${r.link_pdf ? ' PDF: ' + r.link_pdf : ''}`);
+    if (r.numero_cotizacion) return llmText(`Listo: cotización N° ${r.numero_cotizacion} por $${r.total_con_iva.toLocaleString('es-CL')} con IVA, válida ${r.validez_dias} días.${r.link_pdf ? ' PDF: ' + r.link_pdf : ''}`);
     if (/sin stock/.test(String(r.error))) return llmText('Ese producto está sin stock por ahora. ¿Quieres que te derive con un ejecutivo?');
     if (/falta pedir/.test(String(r.error))) return llmText('Para cotizar necesito el RUT de la empresa, razón social, nombre de contacto, correo y teléfono.');
     if (r.derivado) return llmText('Listo, un ejecutivo te responderá por este chat.');

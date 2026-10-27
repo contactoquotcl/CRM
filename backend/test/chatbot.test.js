@@ -346,7 +346,7 @@ test('fase 2 · cotización del bot: motor único, lead en Cotizado, PDF sin cos
 
   const q = (await query('SELECT q.*, u.name AS creator FROM quotes q JOIN users u ON u.id=q.created_by WHERE q.number=$1', [before])).rows[0];
   assert.deepEqual([q.channel, q.creator, q.validity_days, q.total], ['Chatbot', 'Bot', 30, 928176]);
-  assert.match(q.notes, /15 a 20 días hábiles/);
+  assert.doesNotMatch(q.notes, /plazo|días hábiles|entrega/i); // la entrega es inmediata y no se informa en la cotización
   assert.match(q.notes, /Región Metropolitana/);
   const lead = (await query('SELECT l.channel, s.name AS state, l.quote_number FROM leads l JOIN pipeline_states s ON s.id=l.state_id WHERE l.id=$1', [q.lead_id])).rows[0];
   assert.deepEqual([lead.channel, lead.state, lead.quote_number], ['Chatbot', 'Cotizado', before]);

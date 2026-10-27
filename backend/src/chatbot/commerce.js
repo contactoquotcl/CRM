@@ -108,7 +108,7 @@ export async function generarCotizacion(args, ctx) {
     items.push({ product_id: master?.id ?? null, sku: l.sku, description: desc, qty: l.cantidad, cost, ...(source === 'margen' && hasCost ? { margin: m } : { unit_price: l.unit_net }) });
   }
   const conv = await ensureConversation(ctx.session);
-  const notes = [`Cotización generada por el asistente virtual de Quot.`, `Plazo de entrega: ${cfg.deliveryText}.`, `Despacho: ${cfg.shippingText}.`, args.notas || ''].filter(Boolean).join('\n');
+  const notes = [`Cotización generada por el asistente virtual de Quot.`, `Despacho: ${cfg.shippingText}.`, args.notas || ''].filter(Boolean).join('\n');
   // Reutiliza el lead de esta conversación (p. ej. el que dejó una derivación) o el último con el mismo RUT
   let leadId = conv?.lead_id || null;
   if (!leadId) leadId = (await query('SELECT id FROM leads WHERE rut=$1 ORDER BY id DESC LIMIT 1', [c.rut])).rows[0]?.id ?? null;
@@ -131,7 +131,6 @@ export async function generarCotizacion(args, ctx) {
     subtotal_neto: q.subtotal,
     iva_clp: q.iva,
     total_con_iva: q.total,
-    plazo_entrega: cfg.deliveryText,
     despacho: cfg.shippingText,
     ...(base ? { link_pdf: `${base}/api/chatbot/quote-pdf?${pdfLinkParams(q.id)}` } : { nota_pdf: 'El PDF queda disponible para el ejecutivo; el cliente lo recibirá de él.' }),
     pago: 'El PDF incluye los datos para pagar por transferencia.',
