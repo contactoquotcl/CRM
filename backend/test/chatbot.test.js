@@ -220,6 +220,29 @@ test('chatbot: reglas duras (monto inventado, enlaces externos, montos del clien
   delete F.wooLive[101];
 });
 
+test('chatbot: datos del cliente (RUT empresa, razón social, contacto, correo, teléfono) llegan a bandeja y lead', async () => {
+  const token = await newSession();
+  F.llmQueue = [
+    llmTool('derivar_ejecutivo', { motivo: 'cotizacion', resumen: 'quiere 10 ZD421', rut: '77.372.977-8', razon_social: 'Logística Andes SpA', nombre: 'María Pérez', correo: 'maria@andes.cl', telefono: '+56 9 8765 4321' }, 'dc1'),
+    llmText('Listo, un ejecutivo te responderá por este chat.'),
+  ];
+  const r = await say(token, 'quiero cotizar 10 ZD421, soy de Logística Andes');
+  assert.equal(r.data.handoff, true);
+  const full = await convOf(token);
+  const conv = full.conversation;
+  assert.equal(conv.contact_company, 'Logística Andes SpA');
+  assert.equal(conv.contact_name, 'María Pérez');
+  assert.equal(conv.contact_rut, '77372977-8');
+  const lead = (await query('SELECT client_name, razon_social, contact, email, phone, rut FROM leads WHERE id=$1', [conv.lead_id])).rows[0];
+  assert.equal(lead.razon_social, 'Logística Andes SpA');
+  assert.equal(lead.client_name, 'Logística Andes SpA');
+  assert.equal(lead.contact, 'María Pérez');
+  assert.match(JSON.stringify(full.messages.map((m) => m.content)), /Logística Andes SpA/);
+  // El prompt pide los 5 datos juntos y en ese orden
+  const sys = F.llmRequests.at(-1).system;
+  assert.match(sys, /RUT de la empresa, razón social, nombre de contacto, correo y teléfono/);
+});
+
 test('chatbot: validación estricta de argumentos y degradación sin WooCommerce ni IA', async () => {
   const token = await newSession();
   F.llmRequests.length = 0;
@@ -301,8 +324,10 @@ test('derivación: cliente la pide → round-robin, nota privada, lead "Cotizado
   const after = await say(t2, '¿Me pueden llamar al +56 9 1234 5678?');
   assert.deepEqual(after.data.replies, []);
   assert.equal(F.llmRequests.length, 0);
-  const c2 = (await convOf(t2)).conversation;
-  assert.ok(c2.unread_count >= 1);
+  // (se mira la BD directo: abrir la conversación como su ejecutivo asignado la marca como leída)
+  const sid2 = JSON.parse(Buffer.from(t2.split('.')[1], 'base64url')).sid;
+  const unread = (await query('SELECT c.unread_count FROM conversations c JOIN chat_sessions s ON s.conversation_id=c.id WHERE s.id=$1', [sid2])).rows[0].unread_count;
+  assert.ok(unread >= 1);
 });
 
 test('derivación por herramienta, 2 fallos seguidos y frustración', async () => {

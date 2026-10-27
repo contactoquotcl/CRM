@@ -39,10 +39,11 @@ export const TOOLS = [
       properties: {
         motivo: { type: 'string', enum: ['cliente_solicita', 'cotizacion', 'reclamo', 'consulta_tecnica', 'otro'] },
         resumen: { type: 'string', description: 'Resumen breve de lo que necesita el cliente (productos, cantidades, contexto)' },
-        nombre: { type: 'string', description: 'Nombre del cliente si lo entregó' },
+        razon_social: { type: 'string', description: 'Razón social de la empresa del cliente si la entregó' },
+        nombre: { type: 'string', description: 'Nombre de la persona de contacto si lo entregó' },
         correo: { type: 'string', description: 'Correo del cliente si lo entregó' },
         telefono: { type: 'string', description: 'Teléfono del cliente si lo entregó' },
-        rut: { type: 'string', description: 'RUT del cliente o de su empresa si lo entregó' },
+        rut: { type: 'string', description: 'RUT de la empresa del cliente si lo entregó' },
       },
       required: ['motivo', 'resumen'],
     },
@@ -81,7 +82,7 @@ export function validateArgs(name, input) {
     if (tel && !PHONE.test(tel)) return { ok: false, error: 'El teléfono no es válido: pídeselo de nuevo al cliente (o no lo incluyas)' };
     const rut = str(a.rut, 14);
     if (rut && !validRut(rut)) return { ok: false, error: 'El RUT no es válido (dígito verificador): pídeselo de nuevo al cliente (o no lo incluyas)' };
-    Object.assign(out, { nombre: str(a.nombre, 120), correo, telefono: tel, rut: rut ? formatRut(rut) : '' });
+    Object.assign(out, { razon_social: str(a.razon_social, 160), nombre: str(a.nombre, 120), correo, telefono: tel, rut: rut ? formatRut(rut) : '' });
     return { ok: true, args: out };
   }
   return { ok: false, error: `Herramienta desconocida: ${name}` };

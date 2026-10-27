@@ -122,7 +122,7 @@ export default function Conversations() {
             <div className="chat-head">
               <div>
                 <strong>{conv.contact_name || conv.contact_email || `Visitante #${conv.id}`}</strong>
-                <div className="muted small">{[conv.contact_rut && `RUT ${conv.contact_rut}`, conv.contact_email, conv.contact_phone, conv.channel].filter(Boolean).join(' · ')}</div>
+                <div className="muted small">{[conv.contact_company, conv.contact_rut && `RUT ${conv.contact_rut}`, conv.contact_email, conv.contact_phone, conv.channel].filter(Boolean).join(' · ')}</div>
                 {conv.handoff_reason && <div className="muted small">Motivo de derivación: {conv.handoff_reason}</div>}
               </div>
               <div className="row">

@@ -179,7 +179,7 @@ export async function handleUserMessage(session, rawText) {
   const ctx = {
     session,
     handoff: async (args) => {
-      await saveContact(session, { customer_name: args.nombre, customer_email: args.correo, customer_phone: args.telefono, customer_rut: args.rut });
+      await saveContact(session, { customer_company: args.razon_social, customer_name: args.nombre, customer_email: args.correo, customer_phone: args.telefono, customer_rut: args.rut });
       const r = await performHandoff(session, { motivo: args.motivo, resumen: args.resumen });
       handedOff = true;
       return r;

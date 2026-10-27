@@ -27,7 +27,7 @@ export async function getConversation(id) {
 
 export const CONV_SELECT = `
   SELECT c.id, c.chatwoot_id, c.session_id, c.status, c.assignee_id, c.channel, c.contact_name, c.contact_email,
-         c.contact_phone, c.contact_rut, c.lead_id, c.labels, c.handoff_reason, c.unread_count,
+         c.contact_phone, c.contact_rut, c.contact_company, c.lead_id, c.labels, c.handoff_reason, c.unread_count,
          c.last_message_at, c.last_message_preview, c.created_at, c.updated_at, u.name AS assignee_name
   FROM conversations c LEFT JOIN users u ON u.id = c.assignee_id`;
 
@@ -68,7 +68,7 @@ async function linkChatwoot(conv, session) {
       email: session.customer_email || undefined,
       phone: session.customer_phone || undefined,
       identifier: `crm-session:${session.id}`,
-      custom_attributes: { crm_session: session.id, rut: session.customer_rut || '' },
+      custom_attributes: { crm_session: session.id, rut: session.customer_rut || '', razon_social: session.customer_company || '' },
     });
     const c = await cw.createConversation({ contactId: contact.id, status: 'pending', additional_attributes: { crm_conversation_id: conv.id } });
     await query('UPDATE conversations SET chatwoot_id=$1 WHERE id=$2', [c.id, conv.id]);
@@ -89,9 +89,9 @@ export async function ensureConversation(session) {
     return conv;
   }
   const { rows } = await query(
-    `INSERT INTO conversations(session_id, status, channel, contact_name, contact_email, contact_phone, contact_rut)
-     VALUES($1,'pending','Chatbot',$2,$3,$4,$5) RETURNING id`,
-    [session.id, session.customer_name, session.customer_email, session.customer_phone, session.customer_rut]
+    `INSERT INTO conversations(session_id, status, channel, contact_name, contact_email, contact_phone, contact_rut, contact_company)
+     VALUES($1,'pending','Chatbot',$2,$3,$4,$5,$6) RETURNING id`,
+    [session.id, session.customer_name, session.customer_email, session.customer_phone, session.customer_rut, session.customer_company]
   );
   await query('UPDATE chat_sessions SET conversation_id=$1 WHERE id=$2', [rows[0].id, session.id]);
   session.conversation_id = rows[0].id;
@@ -122,7 +122,7 @@ async function pickAgent() {
 }
 
 async function upsertLead(session, conv, { motivo, resumen }) {
-  const name = session.customer_name || session.customer_email || session.customer_phone;
+  const name = session.customer_company || session.customer_name || session.customer_email || session.customer_phone;
   if (!name) return null;
   const rut = session.customer_rut ? formatRut(session.customer_rut) : '';
   let lead = null;
@@ -139,9 +139,9 @@ async function upsertLead(session, conv, { motivo, resumen }) {
   if (!st.rows[0]) st = await query('SELECT id FROM pipeline_states WHERE is_initial LIMIT 1');
   const botId = await getBotUserId();
   const r = await query(
-    `INSERT INTO leads(client_name, rut, email, contact, phone, channel, state_id, state_date, lead_date, comments, created_by)
-     VALUES($1,$2,$3,$4,$5,'Chatbot',$6,$7,$7,$8,$9) RETURNING id`,
-    [name, rut, session.customer_email, session.customer_name, session.customer_phone, st.rows[0]?.id ?? null, today(), note, botId]
+    `INSERT INTO leads(client_name, rut, razon_social, email, contact, phone, channel, state_id, state_date, lead_date, comments, created_by)
+     VALUES($1,$2,$10,$3,$4,$5,'Chatbot',$6,$7,$7,$8,$9) RETURNING id`,
+    [name, rut, session.customer_email, session.customer_name, session.customer_phone, st.rows[0]?.id ?? null, today(), note, botId, session.customer_company]
   );
   return r.rows[0].id;
 }
@@ -156,9 +156,9 @@ export async function handoff(session, { motivo = 'otro', resumen = '', transcri
   await query(
     `UPDATE conversations SET status='open', assignee_id=$2, lead_id=COALESCE($3, lead_id), handoff_reason=$4,
        labels = CASE WHEN labels LIKE '%derivado%' THEN labels ELSE trim(both ',' from labels || ',derivado') END,
-       contact_name=$5, contact_email=$6, contact_phone=$7, contact_rut=$8,
+       contact_name=$5, contact_email=$6, contact_phone=$7, contact_rut=$8, contact_company=$9,
        unread_count=GREATEST(unread_count,1), updated_at=now() WHERE id=$1`,
-    [conv.id, agent?.id ?? null, leadId, `${motivo}: ${resumen}`.slice(0, 500), session.customer_name, session.customer_email, session.customer_phone, session.customer_rut]
+    [conv.id, agent?.id ?? null, leadId, `${motivo}: ${resumen}`.slice(0, 500), session.customer_name, session.customer_email, session.customer_phone, session.customer_rut, session.customer_company]
   );
 
   const base = crmPublicUrl();
@@ -166,7 +166,7 @@ export async function handoff(session, { motivo = 'otro', resumen = '', transcri
     '🤖➜👤 Derivación desde el chatbot',
     `Motivo: ${motivo}`,
     `Resumen: ${resumen || '(sin resumen)'}`,
-    `Cliente: ${[session.customer_name, session.customer_rut && `RUT ${session.customer_rut}`, session.customer_email, session.customer_phone].filter(Boolean).join(' · ') || '(sin datos de contacto)'}`,
+    `Cliente: ${[session.customer_company, session.customer_rut && `RUT ${session.customer_rut}`, session.customer_name && `Contacto: ${session.customer_name}`, session.customer_email, session.customer_phone].filter(Boolean).join(' · ') || '(sin datos de contacto)'}`,
     transcript.length ? '\nÚltimos mensajes:\n' + transcript.map((m) => `${m.role === 'user' ? 'Cliente' : 'Bot'}: ${preview(m.content)}`).join('\n') : '',
     base ? `\nCRM: ${base}/conversaciones?c=${conv.id}` : '',
   ].filter(Boolean);
@@ -339,7 +339,7 @@ export async function listConversations(user, { filter = 'all', label = '', q = 
   else if (filter === 'open') where += " AND c.status = 'open'";
   else if (filter === 'resolved') where += " AND c.status = 'resolved'";
   if (label) { params.push(`%${String(label).toLowerCase()}%`); where += ` AND lower(c.labels) LIKE $${params.length}`; }
-  if (q) { params.push(`%${String(q).toLowerCase()}%`); where += ` AND (lower(c.contact_name) LIKE $${params.length} OR lower(c.contact_email) LIKE $${params.length} OR lower(c.contact_rut) LIKE $${params.length} OR lower(c.last_message_preview) LIKE $${params.length})`; }
+  if (q) { params.push(`%${String(q).toLowerCase()}%`); where += ` AND (lower(c.contact_name) LIKE $${params.length} OR lower(c.contact_email) LIKE $${params.length} OR lower(c.contact_rut) LIKE $${params.length} OR lower(c.contact_company) LIKE $${params.length} OR lower(c.last_message_preview) LIKE $${params.length})`; }
   const { rows } = await query(`${CONV_SELECT} ${where} ORDER BY COALESCE(c.last_message_at, c.created_at) DESC LIMIT 300`, params);
   return rows;
 }

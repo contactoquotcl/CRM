@@ -289,6 +289,9 @@ export async function initDb() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
     CREATE INDEX IF NOT EXISTS conv_messages_conv_idx ON conversation_messages(conversation_id, id);
+
+    ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS customer_company TEXT NOT NULL DEFAULT '';
+    ALTER TABLE conversations ADD COLUMN IF NOT EXISTS contact_company TEXT NOT NULL DEFAULT '';
   `);
 
   for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) {
