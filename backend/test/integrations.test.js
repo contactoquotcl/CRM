@@ -6,7 +6,7 @@ process.env.PGLITE_DIR = 'memory://';
 process.env.ADMIN_EMAIL = 'admin@test.cl';
 process.env.ADMIN_PASSWORD = 'admin-pass-123';
 process.env.JWT_SECRET = 'test-secret';
-for (const k of ['WC_BASE_URL', 'WC_CONSUMER_KEY', 'WC_CONSUMER_SECRET', 'CHATWOOT_BASE_URL', 'CHATWOOT_API_TOKEN', 'ANTHROPIC_API_KEY']) delete process.env[k];
+for (const k of ['WC_BASE_URL', 'WC_CONSUMER_KEY', 'WC_CONSUMER_SECRET', 'CHATWOOT_BASE_URL', 'CHATWOOT_API_TOKEN', 'ANTHROPIC_API_KEY', 'GEMINI_API_KEY']) delete process.env[k];
 
 const fakes = await startFakes({ pageSize: 5 });
 const { initDb, query } = await import('../src/db.js');
@@ -91,9 +91,23 @@ test('probar conexión: WooCommerce y Chatwoot contra los fakes; Claude sin clav
   const c = await api('POST', '/api/integrations/test/chatwoot', { token: admin });
   assert.equal(c.data.ok, true);
   assert.match(c.data.message, /Web Quot/);
-  assert.equal((await api('POST', '/api/integrations/test/anthropic', { token: admin })).status, 400);
+  assert.equal((await api('POST', '/api/integrations/test/llm', { token: admin })).status, 400);
   await api('PUT', '/api/integrations', { token: admin, body: { values: { CHATWOOT_API_TOKEN: 'token-malo' } } });
   const bad = await api('POST', '/api/integrations/test/chatwoot', { token: admin });
   assert.equal(bad.data.ok, false);
   assert.ok(!bad.text.includes('token-malo'));
+});
+
+test('proveedor de IA: Gemini configurable y probable desde el CRM', async () => {
+  assert.equal((await api('PUT', '/api/integrations', { token: admin, body: { values: { LLM_PROVIDER: 'openai' } } })).status, 400);
+  await api('PUT', '/api/integrations', { token: admin, body: { values: { LLM_PROVIDER: 'gemini', GEMINI_API_KEY: 'gem-key', GEMINI_MODEL: 'gemini-2.5-flash' } } });
+  process.env.GEMINI_BASE_URL = fakes.url;
+  const ok = await api('POST', '/api/integrations/test/llm', { token: admin });
+  assert.equal(ok.data.ok, true);
+  assert.match(ok.data.message, /Gemini/);
+  await api('PUT', '/api/integrations', { token: admin, body: { values: { GEMINI_API_KEY: 'gem-mala' } } });
+  const bad = await api('POST', '/api/integrations/test/llm', { token: admin });
+  assert.equal(bad.data.ok, false);
+  assert.ok(!bad.text.includes('gem-mala'));
+  delete process.env.GEMINI_BASE_URL;
 });

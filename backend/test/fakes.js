@@ -51,6 +51,15 @@ export async function startFakes({ pageSize = 5 } = {}) {
       return json(res, 404, {});
     }
 
+    // ---- Gemini (generateContent)
+    if (/^\/v1beta\/models\/[^/]+:generateContent$/.test(p) && req.method === 'POST') {
+      (state.geminiRequests ||= []).push(body);
+      if (req.headers['x-goog-api-key'] !== 'gem-key') return json(res, 403, { error: { message: 'API key not valid' } });
+      const next = (state.geminiQueue ||= []).shift();
+      if (next?.__status) return json(res, next.__status, next.__body || { error: { message: 'error simulado' } });
+      return json(res, 200, next || { candidates: [{ content: { role: 'model', parts: [{ text: 'Respuesta Gemini de prueba.' }] } }] });
+    }
+
     // ---- Anthropic
     if (p === '/v1/messages' && req.method === 'POST') {
       state.llmRequests.push(body);

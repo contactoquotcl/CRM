@@ -159,6 +159,40 @@ test('chatbot: sesión firmada, tool use, precio EN VIVO y espejo en bandeja y C
   assert.deepEqual(widget.messages.map((m) => m.role), ['user', 'assistant']);
 });
 
+test('chatbot con Gemini: tool use traducido, firma de pensamiento reenviada y respuesta final', async () => {
+  const prev = { p: process.env.LLM_PROVIDER, k: process.env.GEMINI_API_KEY, u: process.env.GEMINI_BASE_URL };
+  Object.assign(process.env, { LLM_PROVIDER: 'gemini', GEMINI_API_KEY: 'gem-key', GEMINI_BASE_URL: fakes.url });
+  try {
+    F.geminiRequests = [];
+    F.geminiQueue = [
+      { candidates: [{ content: { role: 'model', parts: [{ thought: true, text: 'pensando…' }, { functionCall: { name: 'buscar_productos', args: { query: 'etiquetas 100x150' } }, thoughtSignature: 'SIG1' }] } }] },
+      { candidates: [{ content: { role: 'model', parts: [{ text: 'Encontré etiquetas térmicas 100x150; ¿te paso el precio?' }] } }] },
+    ];
+    const before = F.llmRequests.length;
+    const token = await newSession();
+    const r = await say(token, 'Busco etiquetas 100x150');
+    assert.match(r.data.replies[0].content, /etiquetas térmicas 100x150/);
+    assert.equal(F.llmRequests.length, before, 'no se llamó a Anthropic');
+    const [first, second] = F.geminiRequests;
+    assert.ok(first.tools[0].functionDeclarations.some((t) => t.name === 'ver_producto'));
+    assert.equal(first.systemInstruction.parts[0].text.length > 50, true);
+    // 2.ª llamada: el functionCall vuelve con su firma y la respuesta de la herramienta como functionResponse
+    const model = second.contents.find((c) => c.role === 'model');
+    assert.equal(model.parts[0].functionCall.name, 'buscar_productos');
+    assert.equal(model.parts[0].thoughtSignature, 'SIG1');
+    const fr = second.contents.at(-1).parts[0].functionResponse;
+    assert.equal(fr.name, 'buscar_productos');
+    assert.equal(typeof fr.response, 'object');
+    // Con error del proveedor el bot cae a derivación, igual que con Claude
+    F.geminiQueue = [{ __status: 500 }, { __status: 500 }];
+    const t2 = await newSession();
+    const r2 = await say(t2, 'hola, busco algo');
+    assert.ok(r2.data.replies.length >= 1);
+  } finally {
+    for (const [k, v] of [['LLM_PROVIDER', prev.p], ['GEMINI_API_KEY', prev.k], ['GEMINI_BASE_URL', prev.u]]) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+  }
+});
+
 test('chatbot: reglas duras (monto inventado, enlaces externos, montos del cliente)', async () => {
   const token = await newSession();
   F.llmQueue = [llmText('Ese producto cuesta $12.345 neto.')];

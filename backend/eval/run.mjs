@@ -12,8 +12,8 @@ const mock = flag('--mock');
 const out = val('--out', new URL('./report.md', import.meta.url).pathname);
 const only = val('--only', '') ? new Set(val('--only').split(',').map(Number)) : null;
 
-const realKey = process.env.ANTHROPIC_API_KEY;
-if (!mock && !realKey) { console.error('Falta ANTHROPIC_API_KEY (o usa --mock para validar solo el arnés).'); process.exit(2); }
+const realKey = process.env.ANTHROPIC_API_KEY || process.env.GEMINI_API_KEY;
+if (!mock && !realKey) { console.error('Falta ANTHROPIC_API_KEY o GEMINI_API_KEY (o usa --mock para validar solo el arnés).'); process.exit(2); }
 
 const fakes = await startFakes({ pageSize: 5 });
 fakes.state.cwAgents = [];

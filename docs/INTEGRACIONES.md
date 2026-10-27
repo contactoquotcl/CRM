@@ -8,7 +8,7 @@ Guía de puesta en marcha de la Fase 1. Todos los valores secretos se cargan **s
 
 | Variable | Obligatoria | Para qué |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | sí | Clave de la API de Claude. Sin ella el chat deriva todo a un ejecutivo. |
+| `ANTHROPIC_API_KEY` o `GEMINI_API_KEY` | sí (una de las dos) | Clave de la IA del chat (Claude o Gemini). Opcionales: `LLM_PROVIDER` (`anthropic`/`gemini`; vacío = el que tenga clave), `GEMINI_MODEL` (por defecto `gemini-2.5-flash`). Sin clave el chat deriva todo a un ejecutivo. Se pueden cargar desde Admin → Integraciones. |
 | `WC_BASE_URL` | sí | URL de la tienda, ej. `https://quot.cl` |
 | `WC_CONSUMER_KEY`, `WC_CONSUMER_SECRET` | sí | Claves REST de WooCommerce con permiso **solo lectura** |
 | `WC_WEBHOOK_SECRET` | sí | Secreto de los webhooks de WooCommerce (lo inventas tú: cadena larga aleatoria) |

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { authenticate, requireAdmin } from '../auth.js';
 import { HttpError } from '../util.js';
 import { describe, saveValues, validate } from '../secrets.js';
-import { llmEnabled, callClaude } from '../chatbot/llm.js';
+import { llmEnabled, callLLM, llmLabel } from '../chatbot/llm.js';
 import { wcEnabled, wcPing } from '../woo.js';
 import { chatwootEnabled, chatwootPing } from '../chatwoot.js';
 
@@ -37,10 +37,10 @@ integrationsRouter.put('/', async (req, res) => {
 });
 
 const TESTS = {
-  anthropic: async () => {
-    if (!llmEnabled()) throw new HttpError(400, 'Falta la API key de Anthropic');
-    await callClaude({ system: 'Responde solo "ok".', messages: [{ role: 'user', content: 'ping' }], tools: undefined });
-    return 'Claude respondió correctamente.';
+  llm: async () => {
+    if (!llmEnabled()) throw new HttpError(400, `Falta la API key del proveedor activo (${llmLabel()})`);
+    await callLLM({ system: 'Responde solo "ok".', messages: [{ role: 'user', content: 'ping' }], tools: undefined });
+    return `${llmLabel()} respondió correctamente.`;
   },
   woocommerce: async () => {
     if (!wcEnabled()) throw new HttpError(400, 'Faltan URL, consumer key o consumer secret');

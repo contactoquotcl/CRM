@@ -4,7 +4,7 @@ import { query } from '../db.js';
 import { botConfig, chatbotTokenSecret, wcConfig } from '../config.js';
 import { HttpError, formatRut, validRut } from '../util.js';
 import { norm } from '../catalog.js';
-import { callClaude, llmEnabled } from './llm.js';
+import { callLLM as callClaude, llmEnabled } from './llm.js';
 import { TOOLS, runTool, validateArgs } from './tools.js';
 import { systemPrompt } from './prompt.js';
 import { handoff as doHandoffInbox, mirrorMessage, setConversationStatus, getConversation } from '../inbox.js';

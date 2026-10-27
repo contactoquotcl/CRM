@@ -30,13 +30,24 @@ export const chatwootConfig = () => ({
   timeoutMs: num('CHATWOOT_TIMEOUT_MS', 10000),
 });
 
-export const llmConfig = () => ({
-  apiKey: e('ANTHROPIC_API_KEY'),
-  baseUrl: trimSlash(e('ANTHROPIC_BASE_URL', 'https://api.anthropic.com')),
-  model: e('CHATBOT_MODEL', 'claude-sonnet-5-5'),
-  maxTokens: num('CHATBOT_MAX_TOKENS', 1024),
-  timeoutMs: num('CHATBOT_LLM_TIMEOUT_MS', 30000),
-});
+export const llmConfig = () => {
+  const apiKey = e('ANTHROPIC_API_KEY');
+  const geminiKey = e('GEMINI_API_KEY');
+  const chosen = e('LLM_PROVIDER').toLowerCase();
+  // Proveedor activo: el elegido en Admin; si no hay elección, el que tenga clave (Claude primero).
+  const provider = chosen === 'gemini' || chosen === 'anthropic' ? chosen : apiKey ? 'anthropic' : geminiKey ? 'gemini' : 'anthropic';
+  return {
+    provider,
+    apiKey,
+    baseUrl: trimSlash(e('ANTHROPIC_BASE_URL', 'https://api.anthropic.com')),
+    model: e('CHATBOT_MODEL', 'claude-sonnet-5-5'),
+    geminiKey,
+    geminiBaseUrl: trimSlash(e('GEMINI_BASE_URL', 'https://generativelanguage.googleapis.com')),
+    geminiModel: e('GEMINI_MODEL', 'gemini-2.5-flash'),
+    maxTokens: num('CHATBOT_MAX_TOKENS', 1024),
+    timeoutMs: num('CHATBOT_LLM_TIMEOUT_MS', 30000),
+  };
+};
 
 export const botConfig = () => ({
   allowedOrigins: e('CHATBOT_ALLOWED_ORIGINS', 'https://quot.cl,https://www.quot.cl').split(',').map((s) => s.trim()).filter(Boolean),

@@ -330,7 +330,18 @@ function Integrations() {
                     : <Badge color={cleared ? '#d97706' : '#dc2626'}>{cleared ? 'se borrará al guardar' : 'sin configurar'}</Badge>}
                 </label>
                 <div className="row" style={{ display: 'flex', gap: 8 }}>
-                  {f.type === 'bool' ? (
+                  {f.type === 'select' ? (
+                    <select
+                      value={clears[f.key] ? '' : edits[f.key] ?? f.value ?? ''}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        const { [f.key]: _drop, ...rest } = edits;
+                        if (v === '') { setEdits(rest); setClears({ ...clears, [f.key]: f.source === 'crm' }); } else { setEdits({ ...rest, [f.key]: v }); setClears({ ...clears, [f.key]: false }); }
+                      }}
+                    >
+                      {f.options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                    </select>
+                  ) : f.type === 'bool' ? (
                     <select value={val} onChange={(e) => setEdits({ ...edits, [f.key]: e.target.value })}>
                       <option value="">{f.configured ? '(sin cambios)' : 'No (por defecto)'}</option>
                       <option value="false">No, son netos</option>

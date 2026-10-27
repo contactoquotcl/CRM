@@ -8,11 +8,14 @@ import { overrides } from './overrides.js';
  */
 export const GROUPS = [
   {
-    id: 'anthropic', title: 'Claude (IA del chatbot)', test: true,
-    help: 'Clave de la API de Anthropic para que el bot responda. Se crea en console.anthropic.com → API Keys.',
+    id: 'llm', title: 'IA del chatbot (Claude o Gemini)', test: true,
+    help: 'Elige qué IA responde en el chat y carga la clave de ese proveedor. Claude: console.anthropic.com → API Keys. Gemini: aistudio.google.com/apikey. Puedes dejar cargadas las dos y cambiar de proveedor cuando quieras.',
     fields: [
-      { key: 'ANTHROPIC_API_KEY', label: 'API key de Anthropic', secret: true, placeholder: 'sk-ant-…' },
-      { key: 'CHATBOT_MODEL', label: 'Modelo', placeholder: 'claude-sonnet-5-5', help: 'Opcional. Déjalo vacío para usar el modelo por defecto.' },
+      { key: 'LLM_PROVIDER', label: 'Proveedor activo', type: 'select', options: [['', 'Automático (el que tenga clave; Claude primero)'], ['anthropic', 'Claude (Anthropic)'], ['gemini', 'Gemini (Google)']] },
+      { key: 'ANTHROPIC_API_KEY', label: 'API key de Claude (Anthropic)', secret: true, placeholder: 'sk-ant-…' },
+      { key: 'CHATBOT_MODEL', label: 'Modelo de Claude', placeholder: 'claude-sonnet-5-5', help: 'Opcional. Vacío = modelo por defecto.' },
+      { key: 'GEMINI_API_KEY', label: 'API key de Gemini (Google)', secret: true, placeholder: 'AIza…' },
+      { key: 'GEMINI_MODEL', label: 'Modelo de Gemini', placeholder: 'gemini-2.5-flash', help: 'Opcional. Vacío = gemini-2.5-flash.' },
     ],
   },
   {
@@ -110,6 +113,7 @@ export function validate(values) {
     if (!val) continue;
     if (val.length > 2000) return `${f.label}: valor demasiado largo`;
     if (f.type === 'url' && !/^https?:\/\/[^\s/]+\.[^\s]+$|^https?:\/\/localhost(:\d+)?/i.test(val)) return `${f.label}: debe ser una URL que empiece con https://`;
+    if (f.type === 'select' && !f.options.some(([o]) => o === val)) return `${f.label}: opción inválida`;
     if (f.type === 'bool' && !['true', 'false'].includes(val)) return `${f.label}: valor inválido`;
     if (['CHATWOOT_ACCOUNT_ID', 'CHATWOOT_INBOX_ID'].includes(k) && !/^\d+$/.test(val)) return `${f.label}: debe ser un número`;
   }
@@ -127,7 +131,7 @@ export async function describe() {
       const envVal = (process.env[f.key] || '').trim();
       const cur = inDb ? overrides.get(f.key) : envVal;
       const out = {
-        key: f.key, label: f.label, secret: !!f.secret, type: f.type || 'text', placeholder: f.placeholder || '', help: f.help || '', generate: !!f.generate,
+        options: f.options, key: f.key, label: f.label, secret: !!f.secret, type: f.type || 'text', placeholder: f.placeholder || '', help: f.help || '', generate: !!f.generate,
         configured: !!cur, source: inDb ? 'crm' : envVal ? 'env' : null,
         updated_at: inDb ? stored.get(f.key).updated_at : null,
       };
