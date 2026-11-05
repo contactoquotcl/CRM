@@ -534,6 +534,7 @@ test('detectores: pedir humano sin falsos positivos, frustración, enlaces', () 
   for (const s of no) assert.equal(wantsHuman(norm(s)), false, s);
   assert.equal(frustrated('Hola, necesito etiquetas', norm('Hola, necesito etiquetas')), false);
   assert.equal(frustrated('PÉSIMO SERVICIO', norm('PÉSIMO SERVICIO')), true);
+  for (const ok of ['IMPRESARA ZEBRA ZT411', 'HOLA NECESITO UNA COTIZACION DE UNA ETIQUETA', 'urgente!!!', 'zebra', 'esa etiqueta no sirve para mi impresora']) assert.equal(frustrated(ok, norm(ok)), false, ok);
   assert.equal(sanitizeUrls('ver https://quot.cl/p/1 y http://malo.com/x'), 'ver https://quot.cl/p/1 y (enlace removido)');
 });
 

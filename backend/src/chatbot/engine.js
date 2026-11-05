@@ -53,11 +53,10 @@ const HUMAN_PATTERNS = [
 ];
 export const wantsHuman = (n) => HUMAN_PATTERNS.some((r) => r.test(n));
 
+// Solo señales inequívocas de molestia. Mayúsculas, signos de exclamación, mensajes de una palabra o "no sirve para X"
+// NO cuentan: mucha gente escribe en MAYÚSCULAS o con Caps Lock sin estar molesta (el resto lo evalúa el asistente y puede derivar).
 export function frustrated(raw, n) {
-  if (/\b(pesim\w*|inutil\w*|no sirve|no me entiendes?|no entiendes|harto|harta|reclamo|estafa|me tienen cansad\w*|vergonzos\w*|ridicul\w*|basura)\b/.test(n)) return true;
-  if (/!{3,}/.test(raw)) return true;
-  const letters = raw.replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ]/g, '');
-  return letters.length >= 15 && letters.replace(/[^A-ZÁÉÍÓÚÑ]/g, '').length / letters.length > 0.7;
+  return /\b(pesim\w*|inutil\w*|estafa\w*|reclamo|reclamar|sernac|denuncia\w*|abogado|verguenza|vergonzos\w*|ridicul\w*|basura|harto|harta|me tienen cansad\w*|no me entiendes?|no entiendes|nadie me (responde|contesta|atiende)|no me sirve nada|pesima atencion|mala atencion|pesimo servicio)\b/.test(n);
 }
 
 const cleanText = (s, max) => String(s ?? '').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').trim().slice(0, max);

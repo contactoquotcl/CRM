@@ -53,3 +53,6 @@ Ver `docs/INTEGRACIONES.md §5`. Resumen: el plan gratuito duerme la API y rompe
 
 ### Fase 2 — pendiente de cargar por el dueño
 Ninguna variable obligatoria nueva. Opcional/recomendado: (1) instalar en WPCode el fragmento `docs/quot-carrito.php` y marcar la casilla en Admin; (2) revisar en Admin → *Cotizaciones y carritos del bot* el margen por defecto, la fuente de precio y el umbral; (3) confirmar que la clave de WooCommerce tenga lectura de pedidos (para «Compras» del panel); (4) `API_PUBLIC_URL` solo si usas dominio propio.
+
+### 32. Derivación a ejecutivo: menos falsos positivos (5 nov 2026)
+Tras revisar las conversaciones reales: "IMPRESARA ZEBRA ZT411" y "HOLA NECESITO UNA COTIZACION…" se derivaban como "frustración" solo por estar en MAYÚSCULAS. Ahora la frustración solo se detecta por palabras inequívocas (reclamo, estafa, pésimo, vergüenza, "no me entiendes"…); mayúsculas, "!!!", una sola palabra o "no sirve para X" ya no derivan. El prompt indica interpretar mensajes cortos/con errores, resolver solo búsquedas y cotizaciones, y derivar siempre que haga falta (soporte, postventa, cursos/servicios, productos fuera de catálogo, reclamos, 2 intentos fallidos) sin decir "no vendemos eso".
