@@ -46,12 +46,22 @@ conversationsRouter.get('/:id/customer', async (req, res) => {
   const cartRow = conv.session_id ? (await query("SELECT id, items, subtotal, status, quote_id, created_at FROM carts WHERE session_id=$1 ORDER BY id DESC LIMIT 1", [conv.session_id])).rows[0] : null;
   let cart = null;
   if (cartRow) { try { cart = { ...cartRow, items: JSON.parse(cartRow.items) }; } catch { cart = null; } }
+  let interest = [];
+  if (conv.session_id) {
+    const sr = (await query('SELECT interest FROM chat_sessions WHERE id=$1', [conv.session_id])).rows[0];
+    try { interest = JSON.parse(sr?.interest || '[]'); } catch { interest = []; }
+  }
+  const lead = conv.lead_id ? (await query('SELECT rut, razon_social, client_name, contact, email, phone, products_text, comments FROM leads WHERE id=$1', [conv.lead_id])).rows[0] : null;
   let purchases = null, purchases_error = '';
   if (email && wcEnabled()) {
     try { purchases = await wcOrdersByEmail(email); } catch (e) { purchases_error = 'No se pudieron leer los pedidos de WooCommerce (revisa que la clave tenga permiso de lectura de pedidos).'; }
   }
   res.json({
-    contact: { name: conv.contact_name, company: conv.contact_company, rut: conv.contact_rut, email: conv.contact_email, phone: conv.contact_phone },
+    contact: {
+      name: conv.contact_name || lead?.contact || '', company: conv.contact_company || lead?.razon_social || '', rut: conv.contact_rut || lead?.rut || '',
+      email: conv.contact_email || lead?.email || '', phone: conv.contact_phone || lead?.phone || '',
+    },
+    interest, lead_products: lead?.products_text || '', handoff_reason: conv.handoff_reason || '',
     leads, quotes, cart, purchases, purchases_error,
   });
 });

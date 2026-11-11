@@ -455,7 +455,12 @@ test('chatbot: validación estricta de argumentos y degradación sin WooCommerce
 test('derivación: cliente la pide → round-robin, nota privada, lead "Cotizado" creado por el Bot', async () => {
   F.llmRequests.length = 0; F.cwCalls.length = 0;
   const t1 = await newSession();
-  const r = await say(t1, 'Mi correo es cliente@empresa.cl y mi RUT 76.086.428-5. Quiero hablar con un ejecutivo, por favor');
+  const r0 = await say(t1, 'Mi correo es cliente@empresa.cl y mi RUT 76.086.428-5. Quiero hablar con un ejecutivo, por favor');
+  // Antes de derivar siempre se piden los datos que faltan
+  assert.equal(r0.data.handoff, false);
+  assert.match(r0.data.replies[0].content, /razón social.*nombre de contacto.*teléfono/s);
+  assert.doesNotMatch(r0.data.replies[0].content, /RUT de la empresa/);
+  const r = await say(t1, 'sin datos');
   assert.equal(r.data.handoff, true);
   assert.equal(r.data.status, 'handoff');
   assert.equal(F.llmRequests.length, 0); // detección en código, sin pasar por el modelo
@@ -478,9 +483,9 @@ test('derivación: cliente la pide → round-robin, nota privada, lead "Cotizado
   assert.equal(leads[0].rut, '76086428-5');
 
   // round-robin: las siguientes derivaciones rotan entre usuarios activos (admin → ana → beto)
-  const t2 = await newSession(); await say(t2, 'quiero hablar con un asesor');
-  const t3 = await newSession(); await say(t3, 'necesito un ejecutivo');
-  const t4 = await newSession(); await say(t4, 'pásame con una persona real');
+  const t2 = await newSession(); await say(t2, 'quiero hablar con un asesor'); await say(t2, 'sin datos');
+  const t3 = await newSession(); await say(t3, 'necesito un ejecutivo'); await say(t3, 'sin datos');
+  const t4 = await newSession(); await say(t4, 'pásame con una persona real'); await say(t4, 'sin datos');
   const names = [];
   for (const t of [t1, t2, t3, t4]) names.push((await convOf(t)).conversation.assignee_name);
   const cycle = ['Administrador', 'Ana', 'Beto'];
@@ -503,7 +508,7 @@ test('derivación: cliente la pide → round-robin, nota privada, lead "Cotizado
 
 test('derivación por herramienta, 2 fallos seguidos y frustración', async () => {
   const t = await newSession();
-  F.llmQueue = [llmTool('derivar_ejecutivo', { motivo: 'cotizacion', resumen: 'Quiere 10 ZD421 y etiquetas', nombre: 'Juan Pérez', correo: 'juan@x.cl', telefono: '+56 9 8765 4321', rut: '76.086.428-5' }), llmText('Listo, un ejecutivo te responderá por este chat.')];
+  F.llmQueue = [llmTool('derivar_ejecutivo', { motivo: 'cotizacion', resumen: 'Quiere 10 ZD421 y etiquetas', nombre: 'Juan Pérez', correo: 'juan@x.cl', telefono: '+56 9 8765 4321', rut: '76.086.428-5', razon_social: 'Empresa X SpA', productos: [{ sku: 'ZD421-203', descripcion: 'Impresora ZD421', cantidad: 10 }] }), llmText('Listo, un ejecutivo te responderá por este chat.')];
   const r = await say(t, 'quiero cotizar 10 impresoras ZD421 y etiquetas');
   assert.equal(r.data.handoff, true);
   const c = (await convOf(t)).conversation;
@@ -516,8 +521,10 @@ test('derivación por herramienta, 2 fallos seguidos y frustración', async () =
   const a = await say(t2, 'hola');
   assert.equal(a.data.handoff, false);
   const b = await say(t2, '¿hay stock de la ZD421?');
-  assert.equal(b.data.handoff, true);
+  assert.equal(b.data.handoff, false); // primero pide los datos
   assert.equal(b.data.replies.length, 2);
+  assert.match(b.data.replies[1].content, /sin datos/);
+  assert.equal((await say(t2, 'sin datos')).data.handoff, true);
   assert.equal((await convOf(t2)).conversation.status, 'open');
 
   // Frustración
@@ -540,7 +547,7 @@ test('detectores: pedir humano sin falsos positivos, frustración, enlaces', () 
 
 test('webhooks de Chatwoot: firma, token, mensajes del ejecutivo al widget, estados y deduplicación', async () => {
   const t = await newSession();
-  await say(t, 'necesito un ejecutivo');
+  await say(t, 'necesito un ejecutivo'); await say(t, 'sin datos');
   const conv = (await convOf(t)).conversation;
   const cwId = conv.chatwoot_id;
   const base = { conversation: { id: cwId, status: 'open', meta: { assignee: { id: 11, email: 'ana@test.cl' } } } };
@@ -597,7 +604,7 @@ test('webhooks de Chatwoot: firma, token, mensajes del ejecutivo al widget, esta
 
 test('bandeja del CRM: permisos por rol, asignación, respuestas, notas y estados', async () => {
   const t = await newSession();
-  await say(t, 'quiero un ejecutivo');
+  await say(t, 'quiero un ejecutivo'); await say(t, 'sin datos');
   const conv = (await convOf(t)).conversation;
   const id = conv.id;
 
@@ -720,4 +727,43 @@ test('si el modelo anuncia la acción ("un momento") sin ejecutarla, se le pide 
   const r = await say(t, 'ok, cotiza 1 ZD421-203');
   assert.equal(Number((await query("SELECT count(*) c FROM quotes WHERE channel='Chatbot'")).rows[0].c), before + 1);
   assert.match(r.data.replies.at(-1).content, /cotización/i);
+});
+
+test('derivar: pide los 5 datos, registra el lead con los productos y el panel los entrega al cotizador', async () => {
+  // 1) Cliente pide ejecutivo → el bot pide datos; el cliente los entrega → se deriva con ellos y queda el lead con el interés
+  const t = await newSession();
+  const a = await say(t, 'quiero hablar con un ejecutivo para cotizar 3 impresoras ZT411');
+  assert.equal(a.data.handoff, false);
+  assert.match(a.data.replies[0].content, /RUT de la empresa, razón social, nombre de contacto, correo, teléfono/);
+  F.llmQueue = [
+    llmTool('derivar_ejecutivo', { motivo: 'cotizacion', resumen: 'Cotizar 3 ZT411', rut: '76.086.428-5', razon_social: 'Acme SpA', nombre: 'Marta Soto', correo: 'marta@acme.cl', telefono: '+56 9 1111 2222', productos: [{ descripcion: 'Impresora Zebra ZT411', cantidad: 3 }] }),
+    llmText('Listo, un ejecutivo te responderá.'),
+  ];
+  const b = await say(t, '76.086.428-5, Acme SpA, Marta Soto, marta@acme.cl, +56 9 1111 2222');
+  assert.equal(b.data.handoff, true);
+  const conv = (await convOf(t)).conversation;
+  assert.equal(conv.contact_company, 'Acme SpA');
+  const lead = (await api('GET', `/api/leads/${conv.lead_id}`, { token: admin })).data;
+  assert.match(lead.products_text, /3× Impresora Zebra ZT411/);
+  const panel = (await api('GET', `/api/conversations/${conv.id}/customer`, { token: admin })).data;
+  assert.equal(panel.interest[0].cantidad, 3);
+  assert.equal(panel.contact.phone, '+56 9 1111 2222');
+
+  // 2) Si el cliente se niega / no responde, igual se deriva (pendiente) y el lead se crea aunque no haya datos
+  const t2 = await newSession();
+  await say(t2, 'necesito hablar con un vendedor');
+  F.llmQueue = [llmText('Claro, te derivo.')]; // el modelo no llama a la herramienta: igual se deriva
+  const c = await say(t2, 'mi correo es x@y.cl');
+  assert.equal(c.data.handoff, true);
+  const conv2 = (await convOf(t2)).conversation;
+  assert.ok(conv2.lead_id);
+
+  // 3) La herramienta rechaza derivar sin haber pedido datos; con sin_datos=true deriva
+  const t3 = await newSession();
+  F.llmQueue = [llmTool('derivar_ejecutivo', { motivo: 'consulta_tecnica', resumen: 'Soporte de equipo comprado' }), llmText('¿Me das tu RUT, razón social, contacto, correo y teléfono?')];
+  const d = await say(t3, 'mi impresora no imprime bien');
+  assert.equal(d.data.handoff, false);
+  F.llmQueue = [llmTool('derivar_ejecutivo', { motivo: 'consulta_tecnica', resumen: 'Soporte de equipo comprado', sin_datos: true }), llmText('Listo.')];
+  assert.equal((await say(t3, 'prefiero no darlos')).data.handoff, true);
+  assert.ok((await convOf(t3)).conversation.lead_id);
 });

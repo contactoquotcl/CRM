@@ -121,16 +121,31 @@ async function pickAgent() {
   return next;
 }
 
+/** Qué quiere el cliente: carrito del bot (con precios) o, si no hay, lo que el bot anotó al derivar. */
+async function interestOf(session) {
+  const cartRow = (await query("SELECT items, subtotal FROM carts WHERE session_id=$1 ORDER BY id DESC LIMIT 1", [session.id])).rows[0];
+  let items = [];
+  let subtotal = 0;
+  if (cartRow) {
+    try { items = JSON.parse(cartRow.items).map((i) => ({ sku: i.sku, descripcion: i.nombre, cantidad: i.cantidad })); subtotal = Number(cartRow.subtotal) || 0; } catch { items = []; }
+  }
+  if (!items.length) { try { items = JSON.parse(session.interest || '[]'); } catch { items = []; } }
+  const text = items.map((i) => `${i.cantidad || 1}× ${i.descripcion || i.sku}${i.sku && i.descripcion ? ` (${i.sku})` : ''}`).join('; ');
+  return { items, text, subtotal };
+}
+
+// El lead se crea SIEMPRE que se deriva (salvo spam), aunque el cliente no haya dado datos: es la potencial cotización que el equipo sigue a mano.
 async function upsertLead(session, conv, { motivo, resumen }) {
-  const name = session.customer_company || session.customer_name || session.customer_email || session.customer_phone;
-  if (!name) return null;
+  const name = session.customer_company || session.customer_name || session.customer_email || session.customer_phone || `Visitante chat #${conv.id}`;
   const rut = session.customer_rut ? formatRut(session.customer_rut) : '';
+  const want = await interestOf(session);
   let lead = null;
-  if (rut) lead = (await query('SELECT id, comments FROM leads WHERE rut=$1 ORDER BY id DESC LIMIT 1', [rut])).rows[0];
-  if (!lead && session.customer_email) lead = (await query('SELECT id, comments FROM leads WHERE lower(email)=lower($1) ORDER BY id DESC LIMIT 1', [session.customer_email])).rows[0];
-  const note = `[Chatbot ${today()}] Derivado a ejecutivo (${motivo}). ${resumen}`.trim();
+  if (rut) lead = (await query('SELECT id, comments, products_text FROM leads WHERE rut=$1 ORDER BY id DESC LIMIT 1', [rut])).rows[0];
+  if (!lead && session.customer_email) lead = (await query('SELECT id, comments, products_text FROM leads WHERE lower(email)=lower($1) ORDER BY id DESC LIMIT 1', [session.customer_email])).rows[0];
+  const note = `[Chatbot ${today()}] Derivado a ejecutivo (${motivo}). ${resumen}${want.text ? ` Interés: ${want.text}.` : ''}`.trim();
   if (lead) {
-    await query('UPDATE leads SET comments=$1, updated_at=now() WHERE id=$2', [[lead.comments, note].filter(Boolean).join('\n'), lead.id]);
+    const prod = want.text && !String(lead.products_text || '').includes(want.text) ? [lead.products_text, want.text].filter(Boolean).join('; ') : lead.products_text;
+    await query('UPDATE leads SET comments=$1, products_text=$3, updated_at=now() WHERE id=$2', [[lead.comments, note].filter(Boolean).join('\n'), lead.id, prod || '']);
     return lead.id;
   }
   // Estado del lead de una derivación: CHATBOT_HANDOFF_LEAD_STATE (por nombre) o, si no existe, el estado inicial.
@@ -139,9 +154,9 @@ async function upsertLead(session, conv, { motivo, resumen }) {
   if (!st.rows[0]) st = await query('SELECT id FROM pipeline_states WHERE is_initial LIMIT 1');
   const botId = await getBotUserId();
   const r = await query(
-    `INSERT INTO leads(client_name, rut, razon_social, email, contact, phone, channel, state_id, state_date, lead_date, comments, created_by)
-     VALUES($1,$2,$10,$3,$4,$5,'Chatbot',$6,$7,$7,$8,$9) RETURNING id`,
-    [name, rut, session.customer_email, session.customer_name, session.customer_phone, st.rows[0]?.id ?? null, today(), note, botId, session.customer_company]
+    `INSERT INTO leads(client_name, rut, razon_social, email, contact, phone, channel, state_id, state_date, lead_date, comments, created_by, products_text)
+     VALUES($1,$2,$10,$3,$4,$5,'Chatbot',$6,$7,$7,$8,$9,$11) RETURNING id`,
+    [name, rut, session.customer_email, session.customer_name, session.customer_phone, st.rows[0]?.id ?? null, today(), note, botId, session.customer_company, want.text]
   );
   return r.rows[0].id;
 }

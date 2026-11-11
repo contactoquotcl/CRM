@@ -45,6 +45,12 @@ export const TOOLS = [
         correo: { type: 'string', description: 'Correo del cliente si lo entregó' },
         telefono: { type: 'string', description: 'Teléfono del cliente si lo entregó' },
         rut: { type: 'string', description: 'RUT de la empresa del cliente si lo entregó' },
+        productos: {
+          type: 'array',
+          description: 'Productos o servicios que el cliente quiere cotizar/comprar (para que el ejecutivo y el pipeline los registren)',
+          items: { type: 'object', properties: { sku: { type: 'string' }, descripcion: { type: 'string' }, cantidad: { type: 'integer' } }, required: ['descripcion'] },
+        },
+        sin_datos: { type: 'boolean', description: 'true SOLO si ya le pediste los datos al cliente y se negó o no los entregó' },
       },
       required: ['motivo', 'resumen'],
     },
@@ -118,6 +124,12 @@ export function validateArgs(name, input) {
     if (tel && !PHONE.test(tel)) return { ok: false, error: 'El teléfono no es válido: pídeselo de nuevo al cliente (o no lo incluyas)' };
     const rut = str(a.rut, 14);
     if (rut && !validRut(rut)) return { ok: false, error: 'El RUT no es válido (dígito verificador): pídeselo de nuevo al cliente (o no lo incluyas)' };
+    out.sin_datos = a.sin_datos === true;
+    out.productos = (Array.isArray(a.productos) ? a.productos.slice(0, 30) : []).map((p) => {
+      const o = p && typeof p === 'object' ? p : {};
+      const q = Number(o.cantidad);
+      return { sku: str(o.sku, 80), descripcion: str(o.descripcion, 200), cantidad: Number.isInteger(q) && q > 0 && q < 1000000 ? q : 1 };
+    }).filter((p) => p.descripcion || p.sku);
     Object.assign(out, { razon_social: str(a.razon_social, 160), nombre: str(a.nombre, 120), correo, telefono: tel, rut: rut ? formatRut(rut) : '' });
     return { ok: true, args: out };
   }
@@ -212,6 +224,7 @@ export async function runTool(name, args, ctx) {
   if (name === 'generar_cotizacion') return generarCotizacion(args, ctx);
   if (name === 'derivar_ejecutivo') {
     const r = await ctx.handoff(args);
+    if (r && r.ok === false) return r;
     return { ok: true, derivado: true, instruccion: 'Informa al cliente, en una o dos frases, que un ejecutivo de Quot le responderá por este mismo chat.', asignado: !!r.assignee };
   }
   return { ok: false, error: 'Herramienta desconocida' };

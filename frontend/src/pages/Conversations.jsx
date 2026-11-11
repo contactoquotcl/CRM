@@ -63,9 +63,14 @@ export default function Conversations() {
     try { setPanel(await api.get(`/api/conversations/${selected}/customer`)); } catch { setPanel(null); }
   }, [selected]);
   useEffect(() => { setPanel(null); loadPanel(); const t = setInterval(loadPanel, 15000); return () => clearInterval(t); }, [loadPanel]);
+  // Productos: el carrito del bot y, si no hay, lo que el bot anotó al derivar (texto libre del cliente)
+  const wantedItems = () => (panel?.cart?.items?.length
+    ? panel.cart.items.map((i) => ({ sku: i.sku, nombre: i.nombre, cantidad: i.cantidad }))
+    : (panel?.interest || []).map((i) => ({ sku: i.sku || '', nombre: i.descripcion || i.sku, cantidad: i.cantidad || 1 })));
+  const missingClient = panel ? [['rut', 'RUT'], ['company', 'razón social'], ['name', 'contacto'], ['email', 'correo'], ['phone', 'teléfono']].filter(([k]) => !String(panel.contact?.[k] || '').trim()).map(([, l]) => l) : [];
   const quoteFromConversation = () => {
     navigate(conv.lead_id ? `/cotizador?lead=${conv.lead_id}` : '/cotizador', {
-      state: { fromConversation: { contact: panel?.contact || {}, items: (panel?.cart?.items || []).map((i) => ({ sku: i.sku, nombre: i.nombre, cantidad: i.cantidad, unit_net: i.unit_net })) } },
+      state: { fromConversation: { contact: panel?.contact || {}, items: wantedItems(), reason: panel?.handoff_reason || '', productsText: panel?.lead_products || '' } },
     });
   };
   useEffect(() => { if (!selected) return undefined; const t = setInterval(loadDetail, 4000); return () => clearInterval(t); }, [selected, loadDetail]);
@@ -203,6 +208,8 @@ export default function Conversations() {
             ))}
           </div>
           <button className="btn primary" onClick={quoteFromConversation} disabled={!panel}>Generar cotización desde esta conversación</button>
+          {panel && missingClient.length > 0 && <div className="small" style={{ color: '#b45309' }}>Faltan datos del cliente: {missingClient.join(', ')}. Pídelos en el chat o complétalos en el cotizador.</div>}
+          {panel && !panel.cart?.items?.length && (panel.interest || []).length > 0 && <div className="muted small">Productos anotados por el bot: {panel.interest.map((i) => `${i.cantidad}× ${i.descripcion || i.sku}`).join('; ')}</div>}
 
           {panel?.cart && (
             <div className="side-block">

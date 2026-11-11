@@ -34,7 +34,7 @@ export default function Quoter() {
   useEffect(() => {
     if (!leadId) return;
     api.get(`/api/leads/${leadId}`).then((l) => {
-      setClient({ rut: l.rut || '', razon_social: l.razon_social || l.client_name || '', email: l.email || '', contact: l.contact || '', phone: l.phone || l.whatsapp || '' });
+      setClient((p) => ({ rut: p.rut || l.rut || '', razon_social: p.razon_social || l.razon_social || l.client_name || '', email: p.email || l.email || '', contact: p.contact || l.contact || '', phone: p.phone || l.phone || l.whatsapp || '' }));
     }).catch((e) => setError(e.message));
   }, [leadId]);
 
@@ -44,15 +44,22 @@ export default function Quoter() {
     if (!fromConv || prefilled.current || !products.length || settings.quote_validity_days === undefined) return;
     prefilled.current = true;
     const c = fromConv.contact || {};
-    setClient({ rut: c.rut || '', razon_social: c.company || '', email: c.email || '', contact: c.name || '', phone: c.phone || '' });
+    setClient((p) => ({ rut: c.rut || p.rut, razon_social: c.company || p.razon_social, email: c.email || p.email, contact: c.name || p.contact, phone: c.phone || p.phone }));
     const missing = [];
+    const norm = (t) => String(t || '').toLowerCase();
     setItems(fromConv.items.map((i) => {
-      const p = products.find((x) => x.sku.toLowerCase() === String(i.sku).toLowerCase());
-      if (!p) missing.push(i.sku);
-      return { product_id: p?.id ?? null, sku: i.sku, description: p ? (p.description ? `${p.name} — ${p.description}` : p.name) : i.nombre, qty: i.cantidad, cost: p ? p.price : 0, margin: '' };
+      const p = products.find((x) => i.sku && norm(x.sku) === norm(i.sku)) || products.find((x) => i.nombre && norm(x.name) === norm(i.nombre));
+      if (!p) missing.push(i.sku || i.nombre);
+      return { product_id: p?.id ?? null, sku: p?.sku || i.sku || '', description: p ? (p.description ? `${p.name} — ${p.description}` : p.name) : i.nombre, qty: i.cantidad, cost: p ? p.price : 0, margin: '' };
     }));
     if (settings.bot_default_margin) setMargin(String(settings.bot_default_margin));
-    setPrefillNote(`Precargado desde la conversación.${missing.length ? ` Sin costo en la maestra: ${missing.join(', ')} (completa el costo).` : ''}`);
+    const faltan = [['rut', 'RUT'], ['company', 'razón social'], ['name', 'contacto'], ['email', 'correo'], ['phone', 'teléfono']].filter(([k]) => !String(c[k] || '').trim()).map(([, l]) => l);
+    setPrefillNote([
+      'Precargado desde la conversación.',
+      fromConv.items.length ? '' : `El bot no registró productos${fromConv.productsText ? ` (anotado: ${fromConv.productsText})` : ''}: agrégalos abajo.`,
+      missing.length ? `Sin costo en la maestra: ${missing.join(', ')} (completa el costo).` : '',
+      faltan.length ? `Faltan datos del cliente: ${faltan.join(', ')}.` : '',
+    ].filter(Boolean).join(' '));
   }, [fromConv, products, settings]);
 
   useEffect(() => {

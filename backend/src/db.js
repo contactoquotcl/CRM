@@ -310,6 +310,9 @@ export async function initDb() {
 
     ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS customer_company TEXT NOT NULL DEFAULT '';
     ALTER TABLE conversations ADD COLUMN IF NOT EXISTS contact_company TEXT NOT NULL DEFAULT '';
+    ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS interest TEXT NOT NULL DEFAULT '';
+    ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS data_asks INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS pending_handoff TEXT NOT NULL DEFAULT '';
   `);
 
   for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) {

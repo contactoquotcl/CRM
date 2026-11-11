@@ -53,6 +53,9 @@ try:
 
         site.locator('textarea').fill('mi correo es cliente@empresa.cl, quiero hablar con un ejecutivo')
         site.keyboard.press('Enter')
+        expect(site.locator('.m.bot').last).to_contain_text('sin datos', timeout=15000)  # antes de derivar pide los datos
+        site.locator('textarea').fill('sin datos')
+        site.keyboard.press('Enter')
         expect(site.locator('.m.sys').last).to_contain_text('ejecutivo de Quot te atenderá', timeout=15000)
         site.screenshot(path=f'{OUT}/2-widget-derivado.png')
 
