@@ -4,6 +4,7 @@ import { HttpError } from '../util.js';
 import { describe, saveValues, validate } from '../secrets.js';
 import { llmEnabled, callLLM, llmLabel } from '../chatbot/llm.js';
 import { wcEnabled, wcPing } from '../woo.js';
+import { mailEnabled, mailPing, mailLabel, sendMail } from '../mailer.js';
 import { chatwootEnabled, chatwootPing } from '../chatwoot.js';
 
 export const integrationsRouter = Router();
@@ -37,6 +38,16 @@ integrationsRouter.put('/', async (req, res) => {
 });
 
 const TESTS = {
+  email: async (req) => {
+    if (!mailEnabled()) throw new HttpError(400, 'Faltan datos del servicio de correo (API key de Resend o servidor SMTP, y correo remitente)');
+    const ping = await mailPing();
+    const to = req.user?.email;
+    if (to) {
+      await sendMail({ to, subject: 'Prueba de correo – CRM Quot', text: `Este es un correo de prueba del CRM enviado con ${mailLabel()}. Si lo ves, los seguimientos de cotizaciones saldrán con este remitente.` });
+      return `${ping} Te enviamos un correo de prueba a ${to}.`;
+    }
+    return ping;
+  },
   llm: async () => {
     if (!llmEnabled()) throw new HttpError(400, `Falta la API key del proveedor activo (${llmLabel()})`);
     await callLLM({ system: 'Responde solo "ok".', messages: [{ role: 'user', content: 'ping' }], tools: undefined });
@@ -58,7 +69,7 @@ integrationsRouter.post('/test/:name', async (req, res) => {
   const t = TESTS[req.params.name];
   if (!t) throw new HttpError(404, 'Prueba desconocida');
   try {
-    res.json({ ok: true, message: await t() });
+    res.json({ ok: true, message: await t(req) });
   } catch (e) {
     if (e instanceof HttpError) throw e;
     // El mensaje de error puede traer texto del servicio remoto, nunca la clave; igual se acota.

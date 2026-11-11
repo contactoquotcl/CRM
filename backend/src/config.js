@@ -81,3 +81,17 @@ export const chatbotTokenSecret = () => {
   if (!j && process.env.NODE_ENV === 'production') throw new Error('Falta CHATBOT_TOKEN_SECRET o JWT_SECRET');
   return `chatbot:${j || 'dev-secret-no-usar-en-produccion'}`;
 };
+
+export const mailConfig = () => ({
+  provider: e('EMAIL_PROVIDER') || (e('RESEND_API_KEY') ? 'resend' : e('SMTP_HOST') ? 'smtp' : ''),
+  resendKey: e('RESEND_API_KEY'),
+  resendUrl: trimSlash(process.env.RESEND_API_URL || 'https://api.resend.com'),
+  smtpHost: e('SMTP_HOST'),
+  smtpPort: num('SMTP_PORT', 587),
+  smtpUser: e('SMTP_USER'),
+  smtpPass: e('SMTP_PASS'),
+  fromName: e('EMAIL_FROM_NAME', 'Quot.cl'),
+  fromEmail: e('EMAIL_FROM', 'contacto@quot.cl'),
+  replyTo: e('EMAIL_REPLY_TO') || e('EMAIL_FROM', 'contacto@quot.cl'),
+  bcc: e('EMAIL_BCC', e('EMAIL_FROM', 'contacto@quot.cl')),
+});

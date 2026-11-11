@@ -43,6 +43,22 @@ export const GROUPS = [
     webhook: 'chatwoot',
   },
   {
+    id: 'email', title: 'Correo de seguimiento de cotizaciones (contacto@quot.cl)', test: true,
+    help: 'Con qué servicio se envían los correos. Recomendado: Resend (por HTTPS; el plan gratis de Render bloquea SMTP): crea una cuenta en resend.com, verifica el dominio quot.cl (SPF/DKIM, mejora la entrega) y pega la API key. SMTP solo funciona si la API está en un plan de pago de Render.',
+    fields: [
+      { key: 'EMAIL_PROVIDER', label: 'Servicio de envío', type: 'select', options: [['', 'Automático (el que tenga datos)'], ['resend', 'Resend (API)'], ['smtp', 'SMTP']] },
+      { key: 'RESEND_API_KEY', label: 'API key de Resend', secret: true, placeholder: 're_…' },
+      { key: 'SMTP_HOST', label: 'Servidor SMTP', placeholder: 'smtp.gmail.com' },
+      { key: 'SMTP_PORT', label: 'Puerto SMTP', placeholder: '587' },
+      { key: 'SMTP_USER', label: 'Usuario SMTP', placeholder: 'contacto@quot.cl' },
+      { key: 'SMTP_PASS', label: 'Contraseña SMTP (o clave de aplicación)', secret: true },
+      { key: 'EMAIL_FROM_NAME', label: 'Nombre del remitente', placeholder: 'Quot.cl' },
+      { key: 'EMAIL_FROM', label: 'Correo remitente', type: 'email', placeholder: 'contacto@quot.cl' },
+      { key: 'EMAIL_REPLY_TO', label: 'Responder a', type: 'email', placeholder: 'contacto@quot.cl', help: 'Las respuestas de los clientes llegan a esta casilla. Vacío = el remitente.' },
+      { key: 'EMAIL_BCC', label: 'Copia oculta (respaldo en la casilla)', type: 'email', placeholder: 'contacto@quot.cl', help: 'Cada correo enviado también llega a esta casilla, para tener todo el hilo ahí. Vacío = el remitente.' },
+    ],
+  },
+  {
     id: 'general', title: 'General',
     help: '',
     fields: [
@@ -116,6 +132,8 @@ export function validate(values) {
     if (f.type === 'url' && !/^https?:\/\/[^\s/]+\.[^\s]+$|^https?:\/\/localhost(:\d+)?/i.test(val)) return `${f.label}: debe ser una URL que empiece con https://`;
     if (f.type === 'select' && !f.options.some(([o]) => o === val)) return `${f.label}: opción inválida`;
     if (f.type === 'bool' && !['true', 'false'].includes(val)) return `${f.label}: valor inválido`;
+    if (f.type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) return `${f.label}: debe ser un correo válido`;
+    if (k === 'SMTP_PORT' && !/^\d{2,5}$/.test(val)) return `${f.label}: debe ser un número`;
     if (['CHATWOOT_ACCOUNT_ID', 'CHATWOOT_INBOX_ID'].includes(k) && !/^\d+$/.test(val)) return `${f.label}: debe ser un número`;
   }
   return null;

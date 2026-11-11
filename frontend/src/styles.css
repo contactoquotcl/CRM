@@ -259,6 +259,8 @@ img, svg { max-width: 100%; }
   .card-order { opacity: 1; }
   .card-foot { flex-wrap: wrap; gap: 4px; }
   .filters-toggle { display: inline-block; flex: 1 1 100%; }
+  .row > .btn:not(.small) { flex: 1 1 45%; }
+  td .muted.small { white-space: nowrap; }
   .filters:not(.open) { display: none; }
   ul.sortable li > .row:first-child { flex-wrap: nowrap; flex: 1 1 100%; }
   ul.sortable li > .row:first-child input:not([type=color]) { flex: 1; min-width: 0; }

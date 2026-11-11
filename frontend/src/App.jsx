@@ -7,6 +7,7 @@ import Pipeline from './pages/Pipeline.jsx';
 import Products from './pages/Products.jsx';
 import Quoter from './pages/Quoter.jsx';
 import Quotes from './pages/Quotes.jsx';
+import Followups from './pages/Followups.jsx';
 import Import from './pages/Import.jsx';
 import Admin from './pages/Admin.jsx';
 import Conversations from './pages/Conversations.jsx';
@@ -87,6 +88,7 @@ function Shell() {
           <NavLink to="/conversaciones">Conversaciones{unread > 0 && <span className="nav-badge">{unread}</span>}</NavLink>
           <NavLink to="/cotizador">Cotizador</NavLink>
           <NavLink to="/cotizaciones">Cotizaciones</NavLink>
+          <NavLink to="/seguimiento">Seguimiento</NavLink>
           <NavLink to="/productos">Productos</NavLink>
           {isAdmin && <NavLink to="/importar">Importar</NavLink>}
           {isAdmin && <NavLink to="/admin">Admin</NavLink>}
@@ -102,6 +104,7 @@ function Shell() {
           <Route path="/conversaciones" element={<Conversations />} />
           <Route path="/cotizador" element={<Quoter />} />
           <Route path="/cotizaciones" element={<Quotes />} />
+          <Route path="/seguimiento" element={<Followups />} />
           <Route path="/productos" element={<Products />} />
           <Route path="/importar" element={isAdmin ? <Import /> : <Navigate to="/" />} />
           <Route path="/admin" element={isAdmin ? <Admin /> : <Navigate to="/" />} />

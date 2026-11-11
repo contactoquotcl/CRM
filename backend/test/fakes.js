@@ -13,6 +13,8 @@ export async function startFakes({ pageSize = 5 } = {}) {
     llmQueue: [], // respuestas del "modelo": objeto o función(body) → objeto | { __status, __body }
     llmRequests: [],
     cwCalls: [],
+    mails: [],
+    mailFail: false,
     cwAgents: [],
     cwFail: new Set(), // rutas (substring) que deben fallar con 500
     nextId: 1000,
@@ -72,6 +74,15 @@ export async function startFakes({ pageSize = 5 } = {}) {
       if (next.__status) return json(res, next.__status, next.__body || { error: { message: 'error simulado' } });
       return json(res, 200, { id: 'msg_test', type: 'message', role: 'assistant', model: body.model, ...next });
     }
+
+    // ---- Resend (correo)
+    if (p === '/emails' && req.method === 'POST') {
+      if (req.headers.authorization !== 'Bearer re_testkey') return json(res, 401, { message: 'API key is invalid' });
+      if (state.mailFail) return json(res, 422, { message: 'domain not verified' });
+      state.mails.push(body);
+      return json(res, 200, { id: 'em_' + state.mails.length });
+    }
+    if (p === '/domains') return req.headers.authorization === 'Bearer re_testkey' ? json(res, 200, { data: [{ name: 'quot.cl', status: 'verified' }] }) : json(res, 401, { message: 'API key is invalid' });
 
     // ---- Chatwoot
     let m;

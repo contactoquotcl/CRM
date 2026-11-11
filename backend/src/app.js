@@ -9,6 +9,7 @@ import { wooWebhookRouter, catalogRouter } from './routes/woo.js';
 import { chatwootWebhookRouter } from './routes/chatwoot.js';
 import { chatbotRouter } from './routes/chatbot.js';
 import { conversationsRouter } from './routes/conversations.js';
+import { followupsRouter } from './routes/followups.js';
 import { integrationsRouter } from './routes/integrations.js';
 import { botConfig } from './config.js';
 import path from 'node:path';
@@ -66,6 +67,7 @@ export function createApp() {
   app.use('/api/chatbot', chatbotRouter);
   app.use('/api/conversations', conversationsRouter);
   app.use('/api/integrations', integrationsRouter);
+  app.use('/api/followups', followupsRouter);
 
   app.use('/api', (_req, res) => res.status(404).json({ error: 'No encontrado' }));
 

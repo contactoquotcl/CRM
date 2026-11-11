@@ -114,6 +114,18 @@ const DEFAULT_SETTINGS = {
   bot_price_source: 'woocommerce',
   bot_quote_handoff_clp: '5000000',
   woo_cart_plugin: '0',
+  followup_s1_subject: 'Seguimiento cotización N° {numero} – {empresa}',
+  followup_s1_body: 'Hola {contacto},\n\nJunto con saludar, te escribo para saber si pudiste revisar la cotización N° {numero} (adjunta), por un total de {total} IVA incluido, enviada el {fecha}.\n\nSi tienes dudas, necesitas ajustar cantidades o prefieres ver otra alternativa, responde este correo y te ayudamos de inmediato.\n\nSaludos cordiales,\nEquipo Quot.cl\ncontacto@quot.cl',
+  followup_s2_subject: 'Recordatorio: cotización N° {numero} vigente hasta el {vence}',
+  followup_s2_body: 'Hola {contacto},\n\nTe escribo nuevamente por la cotización N° {numero} ({total} IVA incluido), que sigue vigente hasta el {vence}. Dejo el PDF adjunto por si te sirve tenerlo a mano.\n\nSi ya no la necesitas o cambió el requerimiento, avísanos y la actualizamos o la damos de baja.\n\nSaludos cordiales,\nEquipo Quot.cl\ncontacto@quot.cl',
+  followup_close_subject: 'Cierre de cotización N° {numero}',
+  followup_close_body: 'Hola {contacto},\n\nComo no hemos recibido respuesta, daremos por cerrada la cotización N° {numero}. Si más adelante la necesitas, escríbenos y la reactivamos con gusto.\n\nSaludos cordiales,\nEquipo Quot.cl\ncontacto@quot.cl',
+  followup_send_on_archive: '0',
+  followup_days_s1: '3',
+  followup_days_s2: '4',
+  followup_days_close: '5',
+  followup_daily_limit: '40',
+  followup_business_hours: '1',
   bank_holder: 'Quot Marketplace Logístico SPA',
   bank_rut: '77372977-8',
   bank_name: 'Mercado Pago',
@@ -313,6 +325,25 @@ export async function initDb() {
     ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS interest TEXT NOT NULL DEFAULT '';
     ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS data_asks INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS pending_handoff TEXT NOT NULL DEFAULT '';
+    ALTER TABLE quotes ADD COLUMN IF NOT EXISTS follow_mode TEXT NOT NULL DEFAULT 'manual';
+    CREATE TABLE IF NOT EXISTS followup_emails (
+      id SERIAL PRIMARY KEY,
+      quote_id INTEGER NOT NULL REFERENCES quotes(id) ON DELETE CASCADE,
+      lead_id INTEGER,
+      step TEXT NOT NULL,
+      to_email TEXT NOT NULL DEFAULT '',
+      subject TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'enviado',
+      error TEXT NOT NULL DEFAULT '',
+      provider TEXT NOT NULL DEFAULT '',
+      provider_id TEXT NOT NULL DEFAULT '',
+      trigger TEXT NOT NULL DEFAULT 'manual',
+      from_state TEXT NOT NULL DEFAULT '',
+      to_state TEXT NOT NULL DEFAULT '',
+      sent_by INTEGER,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS followup_quote_idx ON followup_emails(quote_id, id);
   `);
 
   for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) {

@@ -222,6 +222,22 @@ function Settings() {
         <Field label="Correo"><input value={s.bank_email || ''} onChange={set('bank_email')} /></Field>
       </div>
       <Field label="Condiciones comerciales (pie del PDF)"><textarea rows={5} value={s.quote_terms} onChange={set('quote_terms')} /></Field>
+      <h3>Seguimiento de cotizaciones por correo</h3>
+      <p className="muted small">Variables disponibles: {'{contacto} {empresa} {numero} {total} {fecha} {vence}'}. Al final de cada correo se agrega automáticamente la línea para dejar de recibir seguimientos. El servicio de correo se configura en Integraciones.</p>
+      <div className="grid2">
+        <Field label="Días en «Cotizado» antes del Seguimiento 1" hint="Solo para los envíos automáticos."><input value={s.followup_days_s1} onChange={set('followup_days_s1')} inputMode="numeric" /></Field>
+        <Field label="Días en «Seguimiento 1» antes del Seguimiento 2"><input value={s.followup_days_s2} onChange={set('followup_days_s2')} inputMode="numeric" /></Field>
+        <Field label="Días en «Seguimiento 2» antes de archivar"><input value={s.followup_days_close} onChange={set('followup_days_close')} inputMode="numeric" /></Field>
+        <Field label="Máximo de correos por día" hint="0 = sin límite. Protege la reputación del dominio."><input value={s.followup_daily_limit} onChange={set('followup_daily_limit')} inputMode="numeric" /></Field>
+      </div>
+      <label className="check"><input type="checkbox" checked={s.followup_business_hours !== '0'} onChange={(e) => { setOk(false); setS({ ...s, followup_business_hours: e.target.checked ? '1' : '0' }); }} /> Enviar los automáticos solo en horario hábil (lun–vie, 9:00–18:00 hora de Chile)</label>
+      <label className="check"><input type="checkbox" checked={s.followup_send_on_archive === '1'} onChange={(e) => { setOk(false); setS({ ...s, followup_send_on_archive: e.target.checked ? '1' : '0' }); }} /> Enviar un correo de cierre al archivar (si no, se archiva sin avisar)</label>
+      {[['s1', 'Seguimiento 1'], ['s2', 'Seguimiento 2'], ['close', 'Cierre (al archivar)']].map(([k, t]) => (
+        <fieldset key={k} className="panel stack"><legend>{t}</legend>
+          <Field label="Asunto"><input value={s[`followup_${k}_subject`]} onChange={set(`followup_${k}_subject`)} /></Field>
+          <Field label="Mensaje"><textarea rows={7} value={s[`followup_${k}_body`]} onChange={set(`followup_${k}_body`)} /></Field>
+        </fieldset>
+      ))}
       <div><button className="btn primary" onClick={save}>Guardar configuración</button></div>
     </div>
   );
