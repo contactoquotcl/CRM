@@ -708,3 +708,16 @@ test('seguridad del endpoint público: CORS solo quot.cl, límite por sesión, i
   assert.match(w.headers.get('content-type'), /javascript/);
   assert.equal(w.headers.get('cross-origin-resource-policy'), 'cross-origin');
 });
+
+test('si el modelo anuncia la acción ("un momento") sin ejecutarla, se le pide ejecutarla', async () => {
+  const before = Number((await query("SELECT count(*) c FROM quotes WHERE channel='Chatbot'")).rows[0].c);
+  const t = await newSession();
+  F.llmQueue = [
+    llmText('Perfecto, procederé a generar la cotización. Un momento, por favor.'),
+    llmTool('generar_cotizacion', { cliente: CLIENTE, items: [{ sku: 'ZD421-203', cantidad: 1 }] }),
+    llmText('Listo, tu cotización está generada.'),
+  ];
+  const r = await say(t, 'ok, cotiza 1 ZD421-203');
+  assert.equal(Number((await query("SELECT count(*) c FROM quotes WHERE channel='Chatbot'")).rows[0].c), before + 1);
+  assert.match(r.data.replies.at(-1).content, /cotización/i);
+});

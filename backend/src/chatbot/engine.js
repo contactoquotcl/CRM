@@ -59,6 +59,7 @@ export function frustrated(raw, n) {
   return /\b(pesim\w*|inutil\w*|estafa\w*|reclamo|reclamar|sernac|denuncia\w*|abogado|verguenza|vergonzos\w*|ridicul\w*|basura|harto|harta|me tienen cansad\w*|no me entiendes?|no entiendes|nadie me (responde|contesta|atiende)|no me sirve nada|pesima atencion|mala atencion|pesimo servicio)\b/.test(n);
 }
 
+const PROMISE_RE = /\b(procedere|voy a (generar|armar|crear|preparar|emitir|consultar|verificar|buscar)|un momento|un momentito|dame un momento|permiteme|enseguida|ya te (genero|envio|mando|preparo)|generando)\b/;
 const cleanText = (s, max) => String(s ?? '').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').trim().slice(0, max);
 
 async function captureContact(session, text) {
@@ -206,12 +207,22 @@ export async function handleUserMessage(session, rawText) {
 
   try {
     let done = false;
+    let nudged = false;
     for (let i = 0; i < cfg.maxToolIterations && !done; i++) {
       const resp = await callClaude({ system: systemPrompt(), messages, tools: TOOLS });
       const blocks = Array.isArray(resp.content) ? resp.content : [];
       const uses = blocks.filter((b) => b.type === 'tool_use');
       if (resp.stop_reason !== 'tool_use' || !uses.length) {
         reply = blocks.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
+        // El modelo a veces "anuncia" la acción ("procederé a generar la cotización, un momento") y termina el turno sin ejecutarla.
+        // Se le pide una sola vez que la ejecute ahora; así el cliente nunca queda esperando algo que no va a llegar.
+        if (!nudged && !handedOff && PROMISE_RE.test(norm(reply))) {
+          nudged = true;
+          messages.push({ role: 'assistant', content: reply });
+          messages.push({ role: 'user', content: '[Sistema] Dijiste que harías una acción pero no ejecutaste ninguna herramienta. Ejecútala AHORA con las herramientas (si ya tienes los datos), o si no puedes completarla, deriva a un ejecutivo con derivar_ejecutivo. No respondas solo con texto de espera.' });
+          reply = '';
+          continue;
+        }
         done = true;
         break;
       }

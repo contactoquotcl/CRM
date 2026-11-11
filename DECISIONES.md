@@ -56,3 +56,6 @@ Ninguna variable obligatoria nueva. Opcional/recomendado: (1) instalar en WPCode
 
 ### 32. Derivación a ejecutivo: menos falsos positivos (5 nov 2026)
 Tras revisar las conversaciones reales: "IMPRESARA ZEBRA ZT411" y "HOLA NECESITO UNA COTIZACION…" se derivaban como "frustración" solo por estar en MAYÚSCULAS. Ahora la frustración solo se detecta por palabras inequívocas (reclamo, estafa, pésimo, vergüenza, "no me entiendes"…); mayúsculas, "!!!", una sola palabra o "no sirve para X" ya no derivan. El prompt indica interpretar mensajes cortos/con errores, resolver solo búsquedas y cotizaciones, y derivar siempre que haga falta (soporte, postventa, cursos/servicios, productos fuera de catálogo, reclamos, 2 intentos fallidos) sin decir "no vendemos eso".
+
+### 33. El bot no puede "anunciar" sin ejecutar (11 nov 2026)
+Caso Nunhems Chile SpA: con todos los datos y el producto confirmado, el modelo contestó "procederé a generar la cotización, un momento" y terminó el turno sin llamar a `generar_cotizacion`; el cliente quedó esperando. Ahora, si la respuesta promete una acción sin haber usado herramientas, el motor le pide una vez que la ejecute ya (o que derive a un ejecutivo). El prompt además prohíbe el "un momento" sin acción y las afirmaciones de equivalencia entre modelos (ZT230 → ZT231).
