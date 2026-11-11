@@ -72,5 +72,5 @@ Caso Nunhems Chile SpA: con todos los datos y el producto confirmado, el modelo 
 - **Seguridad de reputación**: máximo diario configurable (40), pie con «responde "no gracias" y no te escribiremos más», no se envía sin correo válido.
 - **Remitente**: contacto@quot.cl, con Responder-a y copia oculta a la misma casilla, así las respuestas y todo el hilo quedan ahí.
 - **Archivado**: por defecto se archiva sin correo; opcional enviar «cierre» (Admin → Empresa y cotizador).
-- **Proveedor**: Resend (API HTTPS, recomendado) o SMTP. El plan gratis de Render bloquea SMTP; con la API en plan de pago SMTP también funciona. Plantillas, días y límite se editan en Admin → Empresa y cotizador; las claves en Admin → Integraciones → Correo de seguimiento.
-- **No incluido (siguiente paso posible)**: detectar automáticamente la respuesta del cliente leyendo la casilla (IMAP) para pausar solo; por ahora se marca «Pausar».
+- **Proveedor**: «Gmail de Quot» (API de Gmail por HTTPS, desde la propia casilla contacto@quot.cl, ver docs/GMAIL.md; funciona en Render gratis, queda en «Enviados» y detecta cuando el cliente responde → la cotización pasa sola a «Pausado»), Resend (API HTTPS) o SMTP. El plan gratis de Render bloquea SMTP; con la API en plan de pago SMTP también funciona. Plantillas, días y límite se editan en Admin → Empresa y cotizador; las claves en Admin → Integraciones → Correo de seguimiento.
+- **Respuestas**: con Gmail se revisan los hilos cada 15 min y con el botón «Revisar respuestas»; con Resend/SMTP hay que marcar «Pausar» a mano.

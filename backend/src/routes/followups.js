@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { authenticate } from '../auth.js';
 import { HttpError } from '../util.js';
 import { query } from '../db.js';
-import { queue, advance, preview, history, runAuto } from '../followup.js';
+import { queue, advance, preview, history, runAuto, checkReplies } from '../followup.js';
 
 export const followupsRouter = Router();
 followupsRouter.use(authenticate);
@@ -40,4 +40,10 @@ followupsRouter.post('/mode', async (req, res) => {
 followupsRouter.post('/run-auto', async (_req, res) => {
   const results = await runAuto({ force: true });
   res.json({ results, sent: results.filter((r) => r.ok).length });
+});
+
+// Con Gmail conectado: revisa los hilos y pausa las cotizaciones cuyo cliente ya respondió.
+followupsRouter.post('/check-replies', async (_req, res) => {
+  const replied = await checkReplies();
+  res.json({ replied, count: replied.length });
 });

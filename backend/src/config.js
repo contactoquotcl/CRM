@@ -83,7 +83,12 @@ export const chatbotTokenSecret = () => {
 };
 
 export const mailConfig = () => ({
-  provider: e('EMAIL_PROVIDER') || (e('RESEND_API_KEY') ? 'resend' : e('SMTP_HOST') ? 'smtp' : ''),
+  provider: e('EMAIL_PROVIDER') || (e('GMAIL_REFRESH_TOKEN') ? 'gmail' : e('RESEND_API_KEY') ? 'resend' : e('SMTP_HOST') ? 'smtp' : ''),
+  gmailClientId: e('GMAIL_CLIENT_ID'),
+  gmailClientSecret: e('GMAIL_CLIENT_SECRET'),
+  gmailRefreshToken: e('GMAIL_REFRESH_TOKEN'),
+  googleTokenUrl: process.env.GOOGLE_TOKEN_URL || 'https://oauth2.googleapis.com/token',
+  gmailApiUrl: trimSlash(process.env.GMAIL_API_URL || 'https://gmail.googleapis.com'),
   resendKey: e('RESEND_API_KEY'),
   resendUrl: trimSlash(process.env.RESEND_API_URL || 'https://api.resend.com'),
   smtpHost: e('SMTP_HOST'),

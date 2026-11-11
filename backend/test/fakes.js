@@ -14,6 +14,8 @@ export async function startFakes({ pageSize = 5 } = {}) {
     llmRequests: [],
     cwCalls: [],
     mails: [],
+    gmailSent: [],
+    gmailReplies: new Set(),
     mailFail: false,
     cwAgents: [],
     cwFail: new Set(), // rutas (substring) que deben fallar con 500
@@ -83,6 +85,26 @@ export async function startFakes({ pageSize = 5 } = {}) {
       return json(res, 200, { id: 'em_' + state.mails.length });
     }
     if (p === '/domains') return req.headers.authorization === 'Bearer re_testkey' ? json(res, 200, { data: [{ name: 'quot.cl', status: 'verified' }] }) : json(res, 401, { message: 'API key is invalid' });
+
+    // ---- Google (OAuth + Gmail)
+    if (p === '/token' && req.method === 'POST') {
+      return new URLSearchParams(raw).get('refresh_token') === 'rt_ok' ? json(res, 200, { access_token: 'at_1', expires_in: 3600 }) : json(res, 400, { error: 'invalid_grant', error_description: 'Bad Request' });
+    }
+    if (p.startsWith('/gmail/v1/users/me/')) {
+      if (req.headers.authorization !== 'Bearer at_1') return json(res, 401, { error: { message: 'Invalid Credentials' } });
+      if (p.endsWith('/profile')) return json(res, 200, { emailAddress: 'contacto@quot.cl' });
+      if (p.endsWith('/messages/send')) {
+        state.gmailSent.push(Buffer.from(body.raw, 'base64url').toString('utf8'));
+        const n = state.gmailSent.length;
+        return json(res, 200, { id: 'msg' + n, threadId: 'th' + n });
+      }
+      const th = p.match(/\/threads\/(.+)$/);
+      if (th) {
+        const msgs = [{ labelIds: ['SENT'], payload: { headers: [{ name: 'From', value: 'Quot.cl <contacto@quot.cl>' }] } }];
+        if (state.gmailReplies.has(th[1])) msgs.push({ labelIds: ['INBOX'], payload: { headers: [{ name: 'From', value: 'Marta <marta@acme.cl>' }] } });
+        return json(res, 200, { messages: msgs });
+      }
+    }
 
     // ---- Chatwoot
     let m;

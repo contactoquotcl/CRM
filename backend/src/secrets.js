@@ -44,9 +44,12 @@ export const GROUPS = [
   },
   {
     id: 'email', title: 'Correo de seguimiento de cotizaciones (contacto@quot.cl)', test: true,
-    help: 'Con qué servicio se envían los correos. Recomendado: Resend (por HTTPS; el plan gratis de Render bloquea SMTP): crea una cuenta en resend.com, verifica el dominio quot.cl (SPF/DKIM, mejora la entrega) y pega la API key. SMTP solo funciona si la API está en un plan de pago de Render.',
+    help: 'Con qué servicio se envían los correos. Gmail de Quot: envía desde la propia casilla contacto@quot.cl (queda en «Enviados») y detecta cuando el cliente responde; funciona por HTTPS, también en el plan gratis de Render. Alternativa: Resend (por HTTPS; el plan gratis de Render bloquea SMTP): crea una cuenta en resend.com, verifica el dominio quot.cl (SPF/DKIM, mejora la entrega) y pega la API key. SMTP solo funciona si la API está en un plan de pago de Render.',
     fields: [
-      { key: 'EMAIL_PROVIDER', label: 'Servicio de envío', type: 'select', options: [['', 'Automático (el que tenga datos)'], ['resend', 'Resend (API)'], ['smtp', 'SMTP']] },
+      { key: 'EMAIL_PROVIDER', label: 'Servicio de envío', type: 'select', options: [['', 'Automático (el que tenga datos)'], ['gmail', 'Gmail de Quot (contacto@quot.cl)'], ['resend', 'Resend (API)'], ['smtp', 'SMTP']] },
+      { key: 'GMAIL_CLIENT_ID', label: 'Gmail: ID de cliente OAuth', placeholder: '…apps.googleusercontent.com' },
+      { key: 'GMAIL_CLIENT_SECRET', label: 'Gmail: secreto de cliente OAuth', secret: true, placeholder: 'GOCSPX-…' },
+      { key: 'GMAIL_REFRESH_TOKEN', label: 'Gmail: refresh token', secret: true, help: 'Se obtiene una sola vez con el OAuth Playground (ver docs/GMAIL.md). Permite enviar desde contacto@quot.cl y detectar respuestas.' },
       { key: 'RESEND_API_KEY', label: 'API key de Resend', secret: true, placeholder: 're_…' },
       { key: 'SMTP_HOST', label: 'Servidor SMTP', placeholder: 'smtp.gmail.com' },
       { key: 'SMTP_PORT', label: 'Puerto SMTP', placeholder: '587' },

@@ -10,6 +10,8 @@ for (const k of ['WC_BASE_URL', 'CHATWOOT_BASE_URL', 'ANTHROPIC_API_KEY', 'GEMIN
 
 const fakes = await startFakes({ pageSize: 5 });
 process.env.RESEND_API_URL = fakes.url;
+process.env.GOOGLE_TOKEN_URL = `${fakes.url}/token`;
+process.env.GMAIL_API_URL = fakes.url;
 const { initDb, query } = await import('../src/db.js');
 const { seedAdmin } = await import('../src/auth.js');
 const { createApp } = await import('../src/app.js');
@@ -135,4 +137,39 @@ test('el filtro "IA" solo lista cotizaciones del bot', async () => {
   const all = (await api('GET', '/api/followups?channel=all')).data.rows.map((r) => r.quote_id);
   assert.ok(!ia.includes(web.id));
   assert.ok(all.includes(web.id));
+});
+
+test('Gmail de Quot: envía por la API con PDF, queda el hilo y si el cliente responde se pausa solo', async () => {
+  await api('PUT', '/api/integrations', { body: { clear: ['RESEND_API_KEY'], values: { EMAIL_PROVIDER: 'gmail', GMAIL_CLIENT_ID: 'cid.apps.googleusercontent.com', GMAIL_CLIENT_SECRET: 'GOCSPX-secret', GMAIL_REFRESH_TOKEN: 'rt_bad' } } });
+  const bad = (await api('POST', '/api/integrations/test/email', { body: {} })).data;
+  assert.equal(bad.ok, false);
+  assert.match(bad.message, /Google rechazó/);
+  await api('PUT', '/api/integrations', { body: { values: { GMAIL_REFRESH_TOKEN: 'rt_ok' } } });
+  const good = (await api('POST', '/api/integrations/test/email', { body: {} })).data;
+  assert.equal(good.ok, true, good.message);
+  assert.match(good.message, /contacto@quot\.cl/);
+
+  const q = await mkQuote('marta@acme.cl');
+  fakes.state.gmailSent.length = 0;
+  let r = (await api('POST', '/api/followups/send', { body: { quote_ids: [q.id] } })).data;
+  assert.equal(r.sent, 1, JSON.stringify(r));
+  const mime = fakes.state.gmailSent.at(-1);
+  assert.match(mime, /To: marta@acme\.cl/);
+  assert.match(mime, /Subject: =\?UTF-8\?Q\?Seguimiento_cotizaci/);
+  assert.match(mime, /filename=Cotizacion-/);
+  assert.match(mime, /Reply-To: contacto@quot\.cl/);
+  assert.equal(await stateOf(q.lead_id), 'Seguimiento 1');
+  const th = (await query("SELECT thread_id FROM followup_emails WHERE quote_id=$1 AND status='enviado'", [q.id])).rows[0].thread_id;
+  assert.ok(th);
+
+  // Sin respuesta: no pasa nada. Con respuesta: se pausa y queda anotado.
+  assert.equal((await api('POST', '/api/followups/check-replies')).data.count, 0);
+  fakes.state.gmailReplies.add(th);
+  const cr = (await api('POST', '/api/followups/check-replies')).data;
+  assert.equal(cr.count, 1);
+  assert.equal((await query('SELECT follow_mode FROM quotes WHERE id=$1', [q.id])).rows[0].follow_mode, 'pausado');
+  assert.match((await query('SELECT comments FROM leads WHERE id=$1', [q.lead_id])).rows[0].comments, /cliente respondió/);
+  assert.equal((await api('GET', `/api/followups/log?quote_id=${q.id}`)).data[0].status, 'respuesta');
+  r = (await api('POST', '/api/followups/send', { body: { quote_ids: [q.id] } })).data;
+  assert.match(r.results[0].message, /pausado/);
 });

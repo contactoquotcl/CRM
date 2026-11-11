@@ -2,7 +2,8 @@
 // Cada envío queda en `followup_emails` (quién, cuándo, a quién, estado, error) y mueve el lead de etapa.
 import { query, getSettings } from './db.js';
 import { quotePdfBuffer } from './quoteService.js';
-import { mailEnabled, sendMail, mailLabel } from './mailer.js';
+import { mailEnabled, sendMail, mailLabel, gmailThreadHasReply } from './mailer.js';
+import { mailConfig } from './config.js';
 import { clp, today } from './util.js';
 
 export const STEPS = [
@@ -90,10 +91,10 @@ export async function advance(quoteId, { userId = null, trigger = 'manual' } = {
   const wantsMail = step.key !== 'close' || st.followup_send_on_archive === '1';
   const stateId = (await query('SELECT id FROM pipeline_states WHERE lower(name)=lower($1) LIMIT 1', [step.to])).rows[0]?.id;
   if (!stateId) return res(false, `No existe la etapa "${step.to}" en el pipeline`);
-  const log = (status, subject, error = '', pid = '', provider = '') => query(
-    `INSERT INTO followup_emails(quote_id, lead_id, step, to_email, subject, status, error, provider, provider_id, trigger, from_state, to_state, sent_by)
-     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
-    [q.quote_id, q.lead_id, step.key, q.email || '', subject, status, error.slice(0, 500), provider, pid, trigger, step.from, step.to, userId]);
+  const log = (status, subject, error = '', pid = '', provider = '', thread = '') => query(
+    `INSERT INTO followup_emails(quote_id, lead_id, step, to_email, subject, status, error, provider, provider_id, trigger, from_state, to_state, sent_by, thread_id)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+    [q.quote_id, q.lead_id, step.key, q.email || '', subject, status, error.slice(0, 500), provider, pid, trigger, step.from, step.to, userId, thread]);
   const move = async (note) => {
     await query('UPDATE leads SET state_id=$1, state_date=$2, comments=$3, updated_at=now() WHERE id=$4',
       [stateId, today(), [q.lead_comments, `[${today()}] ${note}`].filter(Boolean).join('\n'), q.lead_id]);
@@ -109,7 +110,7 @@ export async function advance(quoteId, { userId = null, trigger = 'manual' } = {
     try {
       const pdf = await quotePdfBuffer(q.quote_id);
       const r = await sendMail({ to: q.email, subject, text, attachments: pdf ? [{ filename: `Cotizacion-${pdf.number}.pdf`, content: pdf.buffer }] : [] });
-      await log('enviado', subject, '', r.id, r.provider);
+      await log('enviado', subject, '', r.id, r.provider, r.threadId || '');
       await move(`Correo "${step.label}" enviado a ${q.email} (${trigger === 'auto' ? 'automático' : 'manual'}). Etapa: ${step.from} → ${step.to}.`);
       return res(true, `Enviado a ${q.email}; ahora en ${step.to}`, { to_state: step.to });
     } catch (e) {
@@ -128,10 +129,36 @@ export function inBusinessHours(date = new Date()) {
   return !['Sat', 'Sun'].includes(p.weekday) && Number(p.hour) >= 9 && Number(p.hour) < 18;
 }
 
+/**
+ * Con Gmail: si el cliente respondió en el hilo del correo de seguimiento, la cotización pasa a «Pausado» sola,
+ * queda registrado en el historial y en el lead. Sin Gmail no hace nada.
+ */
+export async function checkReplies() {
+  if (mailConfig().provider !== 'gmail' || !mailEnabled()) return [];
+  const { rows } = await query(
+    `SELECT DISTINCT ON (q.id) q.id AS quote_id, q.number, q.lead_id, f.thread_id, l.comments, f.to_email
+       FROM quotes q JOIN leads l ON l.id=q.lead_id JOIN pipeline_states s ON s.id=l.state_id
+       JOIN followup_emails f ON f.quote_id=q.id AND f.status='enviado' AND f.thread_id <> ''
+      WHERE q.follow_mode <> 'pausado' AND lower(s.name) IN ('seguimiento 1','seguimiento 2')
+      ORDER BY q.id, f.id DESC LIMIT 100`);
+  const out = [];
+  for (const r of rows) {
+    try {
+      if (!(await gmailThreadHasReply(r.thread_id))) continue;
+    } catch (e) { console.error('[seguimiento] revisión de respuestas falló:', e.message); break; }
+    await query("UPDATE quotes SET follow_mode='pausado' WHERE id=$1", [r.quote_id]);
+    await query("INSERT INTO followup_emails(quote_id, lead_id, step, to_email, subject, status, trigger, provider, thread_id) VALUES($1,$2,'reply',$3,'El cliente respondió','respuesta','auto','gmail',$4)", [r.quote_id, r.lead_id, r.to_email || '', r.thread_id]);
+    await query('UPDATE leads SET comments=$1, updated_at=now() WHERE id=$2', [[r.comments, `[${today()}] El cliente respondió el correo de seguimiento: seguimiento pausado. Revisar la casilla y contactarlo.`].filter(Boolean).join('\n'), r.lead_id]);
+    out.push({ quote_id: r.quote_id, number: r.number });
+  }
+  return out;
+}
+
 let running = false;
 /** Envía los seguimientos automáticos que ya les toca (cotizaciones en modo "auto"). */
 export async function runAuto({ force = false } = {}) {
   if (running || !mailEnabled()) return [];
+  await checkReplies().catch((e) => console.error('[seguimiento] respuestas:', e.message));
   const st = await getSettings();
   if (!force && st.followup_business_hours !== '0' && !inBusinessHours()) return [];
   running = true;

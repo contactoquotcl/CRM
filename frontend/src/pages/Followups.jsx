@@ -6,7 +6,7 @@ import { clp, fmtDate } from '../util.js';
 
 const STAGES = ['Cotizado', 'Seguimiento 1', 'Seguimiento 2'];
 const MODE = { manual: ['Manual', '#64748b'], auto: ['Automático', '#16a34a'], pausado: ['Pausado', '#b45309'] };
-const STEP_LABEL = { s1: 'Seguimiento 1', s2: 'Seguimiento 2', close: 'Archivado' };
+const STEP_LABEL = { s1: 'Seguimiento 1', s2: 'Seguimiento 2', close: 'Archivado', reply: 'Respuesta del cliente' };
 const fmtDT = (t) => new Date(t).toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short' });
 
 export default function Followups() {
@@ -55,6 +55,10 @@ export default function Followups() {
     setError(''); setMsg('');
     try { await api.post('/api/followups/mode', { quote_ids: ids, mode }); setMsg(`${ids.length} cotización(es) en modo ${MODE[mode][0].toLowerCase()}.`); setSel(new Set()); await load(); } catch (e) { setError(e.message); }
   };
+  const checkReplies = async () => {
+    setError(''); setMsg(''); setBusy(true);
+    try { const r = await api.post('/api/followups/check-replies'); setMsg(r.count ? `Clientes que respondieron (pausados): ${r.replied.map((x) => 'N° ' + x.number).join(', ')}.` : 'Nadie ha respondido todavía.'); await load(); } catch (e) { setError(e.message); } finally { setBusy(false); }
+  };
   const runAuto = async () => {
     setError(''); setMsg(''); setBusy(true);
     try { const r = await api.post('/api/followups/run-auto'); setMsg(`Seguimientos automáticos enviados ahora: ${r.sent}.`); await load(); } catch (e) { setError(e.message); } finally { setBusy(false); }
@@ -72,7 +76,7 @@ export default function Followups() {
       {data && !data.configured && <Alert>El envío de correos aún no está configurado. Ve a <Link to="/admin">Admin → Integraciones (claves) → Correo de seguimiento</Link> y carga la clave del servicio.</Alert>}
       <Alert>{error}</Alert>
       <Alert kind="ok">{msg}</Alert>
-      {data && <p className="muted small">Correos enviados hoy: <strong>{data.sent_today}</strong>{data.daily_limit ? ` de ${data.daily_limit} permitidos` : ''} · Servicio: {data.provider} · Cada correo lleva el PDF adjunto, responde a contacto@quot.cl y deja copia oculta ahí.</p>}
+      {data && <p className="muted small">Correos enviados hoy: <strong>{data.sent_today}</strong>{data.daily_limit ? ` de ${data.daily_limit} permitidos` : ''} · Servicio: {data.provider} · Cada correo lleva el PDF adjunto y responde a contacto@quot.cl.{data.provider === 'Gmail' ? ' Si el cliente responde, la cotización se pausa sola.' : ''}</p>}
 
       <div className="seg" style={{ marginBottom: 12 }}>
         {STAGES.map((s) => <button key={s} className={stage === s ? 'on' : ''} onClick={() => setStage(s)}>{s} ({counts[s] ?? 0})</button>)}
@@ -88,6 +92,7 @@ export default function Followups() {
             <button className="btn" disabled={!ids.length} onClick={() => setMode('auto')}>Activar automático</button>
             <button className="btn" disabled={!ids.length} onClick={() => setMode('pausado')}>Pausar (cliente respondió)</button>
             <button className="btn" disabled={!ids.length} onClick={() => setMode('manual')}>Volver a manual</button>
+            {data?.provider === 'Gmail' && <button className="btn" disabled={busy} onClick={checkReplies} title="Revisa en Gmail si los clientes respondieron y pausa esas cotizaciones">Revisar respuestas</button>}
             <button className="btn" disabled={busy} onClick={runAuto} title="Envía ahora los automáticos que ya cumplieron los días">Ejecutar automáticos ahora</button>
             <button className="btn small" onClick={() => setSel(new Set(rows.filter((r) => r.due && !r.problems.length).map((r) => r.quote_id)))}>Seleccionar las que ya tocan</button>
           </div>

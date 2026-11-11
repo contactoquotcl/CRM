@@ -343,6 +343,7 @@ export async function initDb() {
       sent_by INTEGER,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
+    ALTER TABLE followup_emails ADD COLUMN IF NOT EXISTS thread_id TEXT NOT NULL DEFAULT '';
     CREATE INDEX IF NOT EXISTS followup_quote_idx ON followup_emails(quote_id, id);
   `);
 
