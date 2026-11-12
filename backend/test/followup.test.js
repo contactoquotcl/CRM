@@ -38,7 +38,7 @@ after(async () => { server.close(); await fakes.stop(); });
 
 test('sin correo configurado no envía y avisa', async () => {
   const q = await mkQuote('marta@acme.cl');
-  const r = (await api('POST', '/api/followups/send', { body: { quote_ids: [q.id] } })).data;
+  const r = (await api('POST', '/api/followups/send', { body: { lead_ids: [q.lead_id] } })).data;
   assert.equal(r.sent, 0);
   assert.match(r.results[0].message, /no está configurado/);
   assert.equal(await stateOf(q.lead_id), 'Cotizado');
@@ -53,16 +53,16 @@ test('configurar Resend (probar), enviar S1 → S2 → archivar con historial y 
 
   const q = await mkQuote('marta2@acme.cl');
   const list = (await api('GET', '/api/followups')).data;
-  const row = list.rows.find((r) => r.quote_id === q.id);
+  const row = list.rows.find((r) => r.lead_id === q.lead_id);
   assert.equal(row.next_label, 'Seguimiento 1');
   assert.equal(list.configured, true);
 
-  const p = (await api('GET', `/api/followups/preview/${q.id}`)).data;
+  const p = (await api('GET', `/api/followups/preview/${q.lead_id}`)).data;
   assert.match(p.subject, new RegExp(`N° ${q.number}`));
   assert.match(p.text, /Marta/);
   assert.match(p.text, /no gracias/);
 
-  let r = (await api('POST', '/api/followups/send', { body: { quote_ids: [q.id] } })).data;
+  let r = (await api('POST', '/api/followups/send', { body: { lead_ids: [q.lead_id] } })).data;
   assert.equal(r.sent, 1);
   assert.equal(await stateOf(q.lead_id), 'Seguimiento 1');
   const m = fakes.state.mails[0];
@@ -72,18 +72,18 @@ test('configurar Resend (probar), enviar S1 → S2 → archivar con historial y 
   assert.equal(m.attachments[0].filename, `Cotizacion-${q.number}.pdf`);
   assert.ok(Buffer.from(m.attachments[0].content, 'base64').subarray(0, 4).toString() === '%PDF');
 
-  r = (await api('POST', '/api/followups/send', { body: { quote_ids: [q.id] } })).data;
+  r = (await api('POST', '/api/followups/send', { body: { lead_ids: [q.lead_id] } })).data;
   assert.equal(r.sent, 1);
   assert.equal(await stateOf(q.lead_id), 'Seguimiento 2');
   assert.match(fakes.state.mails[1].subject, /Recordatorio/);
 
   // Seguimiento 2 → Archivado: por defecto se archiva sin correo
-  r = (await api('POST', '/api/followups/send', { body: { quote_ids: [q.id] } })).data;
+  r = (await api('POST', '/api/followups/send', { body: { lead_ids: [q.lead_id] } })).data;
   assert.equal(r.sent, 1);
   assert.equal(fakes.state.mails.length, 2);
   assert.equal(await stateOf(q.lead_id), 'Archivado');
 
-  const log = (await api('GET', `/api/followups/log?quote_id=${q.id}`)).data;
+  const log = (await api('GET', `/api/followups/log?lead_id=${q.lead_id}`)).data;
   assert.deepEqual(log.map((x) => x.status).reverse(), ['enviado', 'enviado', 'movido']);
   const lead = (await query('SELECT comments FROM leads WHERE id=$1', [q.lead_id])).rows[0];
   assert.match(lead.comments, /"Seguimiento 1" enviado a marta2@acme\.cl/);
@@ -92,34 +92,34 @@ test('configurar Resend (probar), enviar S1 → S2 → archivar con historial y 
 test('error del proveedor: no mueve la etapa y queda registrado; no se repite un paso enviado', async () => {
   const q = await mkQuote('marta3@acme.cl');
   fakes.state.mailFail = true;
-  let r = (await api('POST', '/api/followups/send', { body: { quote_ids: [q.id] } })).data;
+  let r = (await api('POST', '/api/followups/send', { body: { lead_ids: [q.lead_id] } })).data;
   assert.equal(r.failed, 1);
   assert.match(r.results[0].message, /domain not verified/);
   assert.equal(await stateOf(q.lead_id), 'Cotizado');
   fakes.state.mailFail = false;
-  r = (await api('POST', '/api/followups/send', { body: { quote_ids: [q.id] } })).data;
+  r = (await api('POST', '/api/followups/send', { body: { lead_ids: [q.lead_id] } })).data;
   assert.equal(r.sent, 1);
   // Si alguien devuelve el lead a Cotizado, no se reenvía el mismo seguimiento
   const cot = (await query("SELECT id FROM pipeline_states WHERE name='Cotizado'")).rows[0].id;
   await query('UPDATE leads SET state_id=$1 WHERE id=$2', [cot, q.lead_id]);
-  r = (await api('POST', '/api/followups/send', { body: { quote_ids: [q.id] } })).data;
+  r = (await api('POST', '/api/followups/send', { body: { lead_ids: [q.lead_id] } })).data;
   assert.equal(r.sent, 0);
   assert.match(r.results[0].message, /ya se envió/);
-  const log = (await api('GET', `/api/followups/log?quote_id=${q.id}`)).data;
+  const log = (await api('GET', `/api/followups/log?lead_id=${q.lead_id}`)).data;
   assert.deepEqual(log.map((x) => x.status).reverse(), ['error', 'enviado']);
 });
 
 test('sin correo válido o pausada: no se envía; modo automático envía lo que ya toca', async () => {
   const sin = await mkQuote('x@y.cl');
   await query("UPDATE quotes SET email='' WHERE id=$1", [sin.id]); await query("UPDATE leads SET email='' WHERE id=$1", [sin.lead_id]);
-  assert.match((await api('POST', '/api/followups/send', { body: { quote_ids: [sin.id] } })).data.results[0].message, /correo válido/);
+  assert.match((await api('POST', '/api/followups/send', { body: { lead_ids: [sin.lead_id] } })).data.results[0].message, /correo válido/);
   const pa = await mkQuote('pausa@acme.cl');
-  await api('POST', '/api/followups/mode', { body: { quote_ids: [pa.id], mode: 'pausado' } });
-  assert.match((await api('POST', '/api/followups/send', { body: { quote_ids: [pa.id] } })).data.results[0].message, /pausado/);
+  await api('POST', '/api/followups/mode', { body: { lead_ids: [pa.lead_id], mode: 'pausado' } });
+  assert.match((await api('POST', '/api/followups/send', { body: { lead_ids: [pa.lead_id] } })).data.results[0].message, /pausado/);
 
   const au = await mkQuote('auto@acme.cl');
   const aun = await mkQuote('auto2@acme.cl');
-  await api('POST', '/api/followups/mode', { body: { quote_ids: [au.id, aun.id], mode: 'auto' } });
+  await api('POST', '/api/followups/mode', { body: { lead_ids: [au.lead_id, aun.lead_id], mode: 'auto' } });
   // au lleva 3 días en Cotizado (toca S1); aun es de hoy (aún no toca)
   await query("UPDATE leads SET state_date = CURRENT_DATE - 3 WHERE id=$1", [au.lead_id]);
   const before = fakes.state.mails.length;
@@ -128,15 +128,15 @@ test('sin correo válido o pausada: no se envía; modo automático envía lo que
   assert.equal(fakes.state.mails.length, before + 1);
   assert.equal(await stateOf(au.lead_id), 'Seguimiento 1');
   assert.equal(await stateOf(aun.lead_id), 'Cotizado');
-  assert.equal((await query('SELECT trigger FROM followup_emails WHERE quote_id=$1', [au.id])).rows[0].trigger, 'auto');
+  assert.equal((await query('SELECT trigger FROM followup_emails WHERE lead_id=$1', [au.lead_id])).rows[0].trigger, 'auto');
 });
 
 test('el filtro "IA" solo lista cotizaciones del bot', async () => {
   const web = await mkQuote('manual@acme.cl', 'Cotizador');
-  const ia = (await api('GET', '/api/followups')).data.rows.map((r) => r.quote_id);
-  const all = (await api('GET', '/api/followups?channel=all')).data.rows.map((r) => r.quote_id);
-  assert.ok(!ia.includes(web.id));
-  assert.ok(all.includes(web.id));
+  const ia = (await api('GET', '/api/followups?channel=ia')).data.rows.map((r) => r.lead_id);
+  const all = (await api('GET', '/api/followups?channel=all')).data.rows.map((r) => r.lead_id);
+  assert.ok(!ia.includes(web.lead_id));
+  assert.ok(all.includes(web.lead_id));
 });
 
 test('Gmail de Quot: envía por la API con PDF, queda el hilo y si el cliente responde se pausa solo', async () => {
@@ -151,7 +151,7 @@ test('Gmail de Quot: envía por la API con PDF, queda el hilo y si el cliente re
 
   const q = await mkQuote('marta@acme.cl');
   fakes.state.gmailSent.length = 0;
-  let r = (await api('POST', '/api/followups/send', { body: { quote_ids: [q.id] } })).data;
+  let r = (await api('POST', '/api/followups/send', { body: { lead_ids: [q.lead_id] } })).data;
   assert.equal(r.sent, 1, JSON.stringify(r));
   const mime = fakes.state.gmailSent.at(-1);
   assert.match(mime, /To: marta@acme\.cl/);
@@ -159,7 +159,7 @@ test('Gmail de Quot: envía por la API con PDF, queda el hilo y si el cliente re
   assert.match(mime, /filename=Cotizacion-/);
   assert.match(mime, /Reply-To: contacto@quot\.cl/);
   assert.equal(await stateOf(q.lead_id), 'Seguimiento 1');
-  const th = (await query("SELECT thread_id FROM followup_emails WHERE quote_id=$1 AND status='enviado'", [q.id])).rows[0].thread_id;
+  const th = (await query("SELECT thread_id FROM followup_emails WHERE lead_id=$1 AND status='enviado'", [q.lead_id])).rows[0].thread_id;
   assert.ok(th);
 
   // Sin respuesta: no pasa nada. Con respuesta: se pausa y queda anotado.
@@ -167,9 +167,33 @@ test('Gmail de Quot: envía por la API con PDF, queda el hilo y si el cliente re
   fakes.state.gmailReplies.add(th);
   const cr = (await api('POST', '/api/followups/check-replies')).data;
   assert.equal(cr.count, 1);
-  assert.equal((await query('SELECT follow_mode FROM quotes WHERE id=$1', [q.id])).rows[0].follow_mode, 'pausado');
+  assert.equal((await query('SELECT follow_mode FROM leads WHERE id=$1', [q.lead_id])).rows[0].follow_mode, 'pausado');
   assert.match((await query('SELECT comments FROM leads WHERE id=$1', [q.lead_id])).rows[0].comments, /cliente respondió/);
-  assert.equal((await api('GET', `/api/followups/log?quote_id=${q.id}`)).data[0].status, 'respuesta');
-  r = (await api('POST', '/api/followups/send', { body: { quote_ids: [q.id] } })).data;
+  assert.equal((await api('GET', `/api/followups/log?lead_id=${q.lead_id}`)).data[0].status, 'respuesta');
+  r = (await api('POST', '/api/followups/send', { body: { lead_ids: [q.lead_id] } })).data;
   assert.match(r.results[0].message, /pausado/);
+});
+
+test('leads antiguos con N° de cotización (sin registro) entran al seguimiento, sin PDF y sin monto; las derivaciones sin cotizar no', async () => {
+  const cot = (await query("SELECT id FROM pipeline_states WHERE name='Cotizado'")).rows[0].id;
+  const mk = async (name, qn, email) => (await query(
+    `INSERT INTO leads(client_name, razon_social, email, contact, state_id, state_date, lead_date, quote_number, channel) VALUES($1,$1,$2,'Pedro Pérez',$3, CURRENT_DATE, CURRENT_DATE, $4, 'Web') RETURNING id`, [name, email, cot, qn])).rows[0].id;
+  const old = await mk('Antigua Ltda', 321, 'pedro@antigua.cl');
+  const deriv = await mk('Derivación SpA', null, 'der@iv.cl');
+  const list = (await api('GET', '/api/followups')).data;
+  const row = list.rows.find((r) => r.lead_id === old);
+  assert.equal(row.number, 321);
+  assert.equal(row.has_pdf, false);
+  assert.ok(!list.rows.some((r) => r.lead_id === deriv));
+  assert.ok(list.hidden_without_quote >= 1);
+  const p = (await api('GET', `/api/followups/preview/${old}`)).data;
+  assert.equal(p.attachment, '');
+  assert.doesNotMatch(p.text, /adjunt/);
+  assert.doesNotMatch(p.text, /IVA incluido/);
+  assert.match(p.text, /cotización N° 321/);
+  fakes.state.mails.length = 0; fakes.state.gmailSent.length = 0;
+  const r = (await api('POST', '/api/followups/send', { body: { lead_ids: [old] } })).data;
+  assert.equal(r.sent, 1, JSON.stringify(r));
+  assert.equal(await stateOf(old), 'Seguimiento 1');
+  assert.equal((await api('POST', '/api/followups/send', { body: { lead_ids: [deriv] } })).data.sent, 0);
 });

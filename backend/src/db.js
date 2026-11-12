@@ -344,6 +344,11 @@ export async function initDb() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
     ALTER TABLE followup_emails ADD COLUMN IF NOT EXISTS thread_id TEXT NOT NULL DEFAULT '';
+    ALTER TABLE followup_emails ALTER COLUMN quote_id DROP NOT NULL;
+    ALTER TABLE followup_emails ADD COLUMN IF NOT EXISTS quote_number TEXT NOT NULL DEFAULT '';
+    ALTER TABLE leads ADD COLUMN IF NOT EXISTS follow_mode TEXT NOT NULL DEFAULT 'manual';
+    UPDATE leads SET follow_mode = q.follow_mode FROM quotes q WHERE q.lead_id = leads.id AND q.follow_mode <> 'manual' AND leads.follow_mode = 'manual';
+    CREATE INDEX IF NOT EXISTS followup_lead_idx ON followup_emails(lead_id, id);
     CREATE INDEX IF NOT EXISTS followup_quote_idx ON followup_emails(quote_id, id);
   `);
 

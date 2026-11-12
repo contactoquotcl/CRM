@@ -32,7 +32,7 @@ export default function Followups() {
 
   const rows = useMemo(() => (data?.rows || []).filter((r) => r.state_name === stage), [data, stage]);
   const counts = useMemo(() => Object.fromEntries(STAGES.map((s) => [s, (data?.rows || []).filter((r) => r.state_name === s).length])), [data]);
-  const allSel = rows.length > 0 && rows.every((r) => sel.has(r.quote_id));
+  const allSel = rows.length > 0 && rows.every((r) => sel.has(r.lead_id));
   const toggle = (id) => setSel((p) => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const ids = [...sel];
   const next = rows[0]?.next_label;
@@ -40,20 +40,20 @@ export default function Followups() {
   const openConfirm = async () => {
     setError(''); setMsg('');
     try {
-      const first = rows.find((r) => sel.has(r.quote_id));
-      setConfirm({ preview: await api.get(`/api/followups/preview/${first.quote_id}`), ids });
+      const first = rows.find((r) => sel.has(r.lead_id));
+      setConfirm({ preview: await api.get(`/api/followups/preview/${first.lead_id}`), ids });
     } catch (e) { setError(e.message); }
   };
   const send = async () => {
     setBusy(true);
     try {
-      const r = await api.post('/api/followups/send', { quote_ids: confirm.ids });
+      const r = await api.post('/api/followups/send', { lead_ids: confirm.ids });
       setConfirm(null); setResults(r); setSel(new Set()); await load();
     } catch (e) { setError(e.message); setConfirm(null); } finally { setBusy(false); }
   };
   const setMode = async (mode) => {
     setError(''); setMsg('');
-    try { await api.post('/api/followups/mode', { quote_ids: ids, mode }); setMsg(`${ids.length} cotización(es) en modo ${MODE[mode][0].toLowerCase()}.`); setSel(new Set()); await load(); } catch (e) { setError(e.message); }
+    try { await api.post('/api/followups/mode', { lead_ids: ids, mode }); setMsg(`${ids.length} cotización(es) en modo ${MODE[mode][0].toLowerCase()}.`); setSel(new Set()); await load(); } catch (e) { setError(e.message); }
   };
   const checkReplies = async () => {
     setError(''); setMsg(''); setBusy(true);
@@ -76,7 +76,8 @@ export default function Followups() {
       {data && !data.configured && <Alert>El envío de correos aún no está configurado. Ve a <Link to="/admin">Admin → Integraciones (claves) → Correo de seguimiento</Link> y carga la clave del servicio.</Alert>}
       <Alert>{error}</Alert>
       <Alert kind="ok">{msg}</Alert>
-      {data && <p className="muted small">Correos enviados hoy: <strong>{data.sent_today}</strong>{data.daily_limit ? ` de ${data.daily_limit} permitidos` : ''} · Servicio: {data.provider} · Cada correo lleva el PDF adjunto y responde a contacto@quot.cl.{data.provider === 'Gmail' ? ' Si el cliente responde, la cotización se pausa sola.' : ''}</p>}
+      {data?.hidden_without_quote > 0 && <p className="muted small">Hay {data.hidden_without_quote} leads en etapas de cotización sin N° de cotización (derivaciones del chat sin cotizar): no se incluyen aquí.</p>}
+      {data && <p className="muted small">Correos enviados hoy: <strong>{data.sent_today}</strong>{data.daily_limit ? ` de ${data.daily_limit} permitidos` : ''} · Servicio: {data.provider} · Cada correo lleva el PDF adjunto cuando la cotización está registrada y responde a contacto@quot.cl.{data.provider === 'Gmail' ? ' Si el cliente responde, la cotización se pausa sola.' : ''}</p>}
 
       <div className="seg" style={{ marginBottom: 12 }}>
         {STAGES.map((s) => <button key={s} className={stage === s ? 'on' : ''} onClick={() => setStage(s)}>{s} ({counts[s] ?? 0})</button>)}
@@ -94,22 +95,22 @@ export default function Followups() {
             <button className="btn" disabled={!ids.length} onClick={() => setMode('manual')}>Volver a manual</button>
             {data?.provider === 'Gmail' && <button className="btn" disabled={busy} onClick={checkReplies} title="Revisa en Gmail si los clientes respondieron y pausa esas cotizaciones">Revisar respuestas</button>}
             <button className="btn" disabled={busy} onClick={runAuto} title="Envía ahora los automáticos que ya cumplieron los días">Ejecutar automáticos ahora</button>
-            <button className="btn small" onClick={() => setSel(new Set(rows.filter((r) => r.due && !r.problems.length).map((r) => r.quote_id)))}>Seleccionar las que ya tocan</button>
+            <button className="btn small" onClick={() => setSel(new Set(rows.filter((r) => r.due && !r.problems.length).map((r) => r.lead_id)))}>Seleccionar las que ya tocan</button>
           </div>
           <div className="table-wrap">
             <table>
               <thead><tr>
-                <th><input type="checkbox" checked={allSel} onChange={() => setSel(allSel ? new Set() : new Set(rows.map((r) => r.quote_id)))} aria-label="Seleccionar todas" /></th>
+                <th><input type="checkbox" checked={allSel} onChange={() => setSel(allSel ? new Set() : new Set(rows.map((r) => r.lead_id)))} aria-label="Seleccionar todas" /></th>
                 <th>N°</th><th>Cliente</th><th>Contacto / correo</th><th className="num">Total c/IVA</th><th>En etapa</th><th>Toca</th><th>Modo</th><th>Último correo</th>
               </tr></thead>
               <tbody>
                 {rows.map((r) => (
-                  <tr key={r.quote_id}>
-                    <td><input type="checkbox" checked={sel.has(r.quote_id)} onChange={() => toggle(r.quote_id)} aria-label={`Seleccionar ${r.number}`} /></td>
-                    <td><strong>{r.number}</strong><div className="muted small">{fmtDate(r.quote_date)}</div></td>
+                  <tr key={r.lead_id}>
+                    <td><input type="checkbox" checked={sel.has(r.lead_id)} onChange={() => toggle(r.lead_id)} aria-label={`Seleccionar ${r.number}`} /></td>
+                    <td><strong>{r.number}</strong><div className="muted small">{r.quote_date ? fmtDate(r.quote_date) : ''}</div>{!r.has_pdf && <Badge color="#64748b">sin PDF</Badge>}</td>
                     <td>{r.razon_social}</td>
                     <td>{r.contact}<div className="muted small">{r.email || '—'}</div>{r.problems.map((p) => <Badge key={p} color="#dc2626">{p}</Badge>)}</td>
-                    <td className="num">{clp(r.total)}</td>
+                    <td className="num">{r.total > 0 ? clp(r.total) : '—'}</td>
                     <td>{r.days_in_state} d</td>
                     <td>{r.due ? <Badge color="#16a34a">ya toca</Badge> : <span className="muted">en {r.due_in_days} d</span>}</td>
                     <td><Badge color={MODE[r.follow_mode]?.[1]}>{MODE[r.follow_mode]?.[0] || r.follow_mode}</Badge></td>
@@ -131,7 +132,7 @@ export default function Followups() {
               {log.map((l) => (
                 <tr key={l.id}>
                   <td>{fmtDT(l.created_at)}</td>
-                  <td>N° {l.number}<div className="muted small">{l.razon_social}</div></td>
+                  <td>{l.number ? `N° ${l.number}` : '—'}<div className="muted small">{l.razon_social}</div></td>
                   <td>{l.from_state} → {l.to_state}</td>
                   <td>{l.to_email || '—'}</td>
                   <td className="small">{l.subject}</td>
@@ -152,7 +153,7 @@ export default function Followups() {
               <p>Cada cotización pasará de <strong>{stage}</strong> a <strong>{confirm.preview.to_state}</strong>{confirm.preview.sends_mail ? ', enviando el correo con su PDF adjunto' : ' (se archiva sin enviar correo; puedes activar el aviso en Admin)'}.</p>
               {confirm.preview.sends_mail && (
                 <div className="panel" style={{ background: '#f8fafc' }}>
-                  <div className="muted small">Vista previa con la cotización N° {confirm.preview.number} · Para: {confirm.preview.to || '—'} · Adjunto: {confirm.preview.attachment}</div>
+                  <div className="muted small">Vista previa con la cotización N° {confirm.preview.number} · Para: {confirm.preview.to || '—'} · Adjunto: {confirm.preview.attachment || 'sin adjunto (cotización antigua sin PDF registrado)'}</div>
                   <div style={{ margin: '6px 0' }}><strong>{confirm.preview.subject}</strong></div>
                   <div style={{ whiteSpace: 'pre-wrap' }}>{confirm.preview.text}</div>
                 </div>
@@ -169,7 +170,7 @@ export default function Followups() {
       {results && (
         <Modal title={`Resultado: ${results.sent} listas, ${results.failed} con problemas`} onClose={() => setResults(null)}>
           <ul className="stack" style={{ paddingLeft: 18 }}>
-            {results.results.map((r) => <li key={r.quote_id} style={{ color: r.ok ? '#166534' : '#b91c1c' }}>N° {r.number}: {r.message}</li>)}
+            {results.results.map((r) => <li key={r.lead_id} style={{ color: r.ok ? '#166534' : '#b91c1c' }}>N° {r.number}: {r.message}</li>)}
           </ul>
           <div className="modal-actions"><button className="btn primary" onClick={() => setResults(null)}>Cerrar</button></div>
         </Modal>
