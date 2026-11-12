@@ -2,6 +2,7 @@ import { query } from './db.js';
 import { wcConfig } from './config.js';
 import { wcEnabled } from './woo.js';
 import { runAuto } from './followup.js';
+import { runAlerts } from './alerts.js';
 import { syncAll } from './catalog.js';
 
 // Carga inicial del catálogo (si está vacío) y reconciliación periódica con WooCommerce.
@@ -9,6 +10,8 @@ export function startBackgroundJobs() {
   // Seguimientos automáticos de cotizaciones (solo actúan si hay correo configurado y cotizaciones en modo "auto").
   setInterval(() => runAuto().then((r) => r.length && console.log(`[seguimiento] ${r.filter((x) => x.ok).length}/${r.length} enviados`)).catch((e) => console.error('[seguimiento] falló:', e.message)), 15 * 60 * 1000).unref();
   setTimeout(() => runAuto().catch(() => {}), 60 * 1000).unref();
+  // Alertas de conversaciones sin atender (revisa cada minuto mientras el servicio está despierto).
+  setInterval(() => runAlerts().then((r) => r.length && console.log(`[alertas] ${r.length} enviadas`)).catch((e) => console.error('[alertas] falló:', e.message)), 60 * 1000).unref();
   if (!wcEnabled()) {
     console.log('[catalog] WooCommerce no configurado: sin sincronización de catálogo');
     return;

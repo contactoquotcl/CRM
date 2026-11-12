@@ -173,7 +173,7 @@ export async function handoff(session, { motivo = 'otro', resumen = '', transcri
     `UPDATE conversations SET status='open', assignee_id=$2, lead_id=COALESCE($3, lead_id), handoff_reason=$4,
        labels = CASE WHEN labels LIKE '%derivado%' THEN labels ELSE trim(both ',' from labels || ',derivado') END || CASE WHEN $10::boolean AND labels NOT LIKE '%posible_spam%' THEN ',posible_spam' ELSE '' END,
        contact_name=$5, contact_email=$6, contact_phone=$7, contact_rut=$8, contact_company=$9,
-       unread_count=GREATEST(unread_count,1), updated_at=now() WHERE id=$1`,
+       unread_count=GREATEST(unread_count,1), handoff_at=now(), alerted_at=NULL, updated_at=now() WHERE id=$1`,
     [conv.id, agent?.id ?? null, leadId, `${motivo}: ${resumen}`.slice(0, 500), session.customer_name, session.customer_email, session.customer_phone, session.customer_rut, session.customer_company, spam]
   );
 

@@ -226,3 +226,32 @@ test('programar envíos manuales: se envían a su hora, se pueden cancelar y no 
   assert.equal((await query("SELECT trigger FROM followup_emails WHERE lead_id=$1 AND status='enviado'", [a.lead_id])).rows[0].trigger, 'programado');
   assert.equal((await query('SELECT follow_sched_at FROM leads WHERE id=$1', [b.lead_id])).rows[0].follow_sched_at, null);
 });
+
+test('alertas: conversación derivada sin atender envía correo a contacto; no repite ni alerta si respondieron', async () => {
+  const { runAlerts } = await import('../src/alerts.js');
+  await api('PUT', '/api/integrations', { body: { values: { EMAIL_PROVIDER: 'resend', RESEND_API_KEY: 're_testkey' } } });
+  const mk = async (name, labels = 'derivado') => (await query("INSERT INTO conversations(status, contact_name, contact_company, handoff_reason, labels, handoff_at) VALUES('open',$1,$1,'cotizacion: necesita precio',$2, now() - interval '5 minutes') RETURNING id", [name, labels])).rows[0].id;
+  const a = await mk('Alfa SpA');
+  const b = await mk('Beta SpA');
+  const sp = await mk('Spam SpA', 'derivado,posible_spam');
+  const fresh = (await query("INSERT INTO conversations(status, contact_name, labels, handoff_at) VALUES('open','Nueva','derivado', now()) RETURNING id")).rows[0].id;
+  await query("INSERT INTO conversation_messages(conversation_id, direction, sender_type, content) VALUES($1,'out','agent','Hola, te ayudo')", [b]);
+  const before = fakes.state.mails.length;
+  const r1 = await runAlerts();
+  assert.deepEqual(r1.map((x) => x.conversation_id), [a]);
+  const mail = fakes.state.mails[before];
+  assert.match(JSON.stringify(mail), /contacto@quot\.cl/);
+  assert.match(JSON.stringify(mail), /requiere atenci/);
+  assert.equal((await runAlerts()).length, 0); // no repite
+  // tarea pendiente del bot
+  await query("INSERT INTO chat_sessions(id, status, pending_handoff, pending_at) VALUES('s-pend','bot','otro|quiere cotizar', now() - interval '4 minutes')");
+  const r2 = await runAlerts();
+  assert.deepEqual(r2.map((x) => x.kind), ['pendiente']);
+  assert.equal((await runAlerts()).length, 0);
+  // desactivadas
+  await query("UPDATE conversations SET alerted_at=NULL WHERE id=$1", [a]);
+  await api('PUT', '/api/settings', { body: { alert_enabled: '0' } });
+  assert.equal((await runAlerts()).length, 0);
+  await api('PUT', '/api/settings', { body: { alert_enabled: '1' } });
+  void sp; void fresh;
+});

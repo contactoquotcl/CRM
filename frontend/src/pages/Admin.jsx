@@ -222,6 +222,13 @@ function Settings() {
         <Field label="Correo"><input value={s.bank_email || ''} onChange={set('bank_email')} /></Field>
       </div>
       <Field label="Condiciones comerciales (pie del PDF)"><textarea rows={5} value={s.quote_terms} onChange={set('quote_terms')} /></Field>
+      <h3>Alertas de conversaciones por correo</h3>
+      <p className="muted small">Si una conversación derivada (o una tarea pendiente del bot) pasa varios minutos sin que un ejecutivo responda, se envía un aviso por correo. Usa el servicio de correo de Integraciones.</p>
+      <label className="check"><input type="checkbox" checked={s.alert_enabled !== '0'} onChange={(e) => { setOk(false); setS({ ...s, alert_enabled: e.target.checked ? '1' : '0' }); }} /> Enviar alertas de conversaciones sin atender</label>
+      <div className="grid2">
+        <Field label="Correo que recibe las alertas"><input type="email" value={s.alert_email || ''} onChange={set('alert_email')} /></Field>
+        <Field label="Minutos de espera antes de alertar" hint="Recomendado: 2 a 3."><input value={s.alert_minutes || ''} onChange={set('alert_minutes')} inputMode="numeric" /></Field>
+      </div>
       <h3>Seguimiento de cotizaciones por correo</h3>
       <p className="muted small">Variables disponibles: {'{contacto} {empresa} {numero} {total} {fecha} {vence}'}. Al final de cada correo se agrega automáticamente la línea para dejar de recibir seguimientos. El servicio de correo se configura en Integraciones.</p>
       <div className="grid2">

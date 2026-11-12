@@ -82,3 +82,8 @@ Había 179 leads en «Cotizado» pero solo 20 con cotización registrada en el s
 - En Seguimiento se pueden seleccionar cotizaciones y «Programar envío» para una fecha/hora (futura, máx. 90 días). Se guarda en `leads.follow_sched_*`.
 - El job (cada 15 min) envía lo vencido con `trigger='programado'` y avanza la etapa; antes revisa respuestas. Si cambió la etapa o está pausado, se cancela; si se alcanza el límite diario, queda para el siguiente ciclo; error → se limpia la programación.
 - Limitación: Render free duerme; el envío sale al despertar el servicio (≈15 min de granularidad).
+
+## 38. Alertas por correo de conversaciones sin atender
+- Si una conversación derivada pasa N min (default 3) sin mensaje público de un ejecutivo, o el bot deja una tarea pendiente (pidió datos para derivar) sin resolverse en N min, se envía un correo a `alert_email` (default contacto@quot.cl) con motivo, cliente, últimos mensajes y link.
+- Una alerta por derivación (`conversations.alerted_at`, se reinicia en una nueva derivación) y una por tarea pendiente (`chat_sessions.pending_alerted_at`). Posible spam no alerta. Configurable en Admin (activar, correo, minutos).
+- Revisión cada 60 s mientras Render esté despierto (el chat activo lo mantiene despierto). Requiere correo configurado (Integraciones); si falla el envío reintenta en el siguiente ciclo.

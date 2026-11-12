@@ -126,6 +126,9 @@ const DEFAULT_SETTINGS = {
   followup_days_close: '5',
   followup_daily_limit: '40',
   followup_business_hours: '1',
+  alert_enabled: '1',
+  alert_email: 'contacto@quot.cl',
+  alert_minutes: '3',
   bank_holder: 'Quot Marketplace Logístico SPA',
   bank_rut: '77372977-8',
   bank_name: 'Mercado Pago',
@@ -324,6 +327,10 @@ export async function initDb() {
     ALTER TABLE conversations ADD COLUMN IF NOT EXISTS contact_company TEXT NOT NULL DEFAULT '';
     ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS interest TEXT NOT NULL DEFAULT '';
     ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS data_asks INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE conversations ADD COLUMN IF NOT EXISTS handoff_at TIMESTAMPTZ;
+    ALTER TABLE conversations ADD COLUMN IF NOT EXISTS alerted_at TIMESTAMPTZ;
+    ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS pending_at TIMESTAMPTZ;
+    ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS pending_alerted_at TIMESTAMPTZ;
     ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS pending_handoff TEXT NOT NULL DEFAULT '';
     ALTER TABLE quotes ADD COLUMN IF NOT EXISTS follow_mode TEXT NOT NULL DEFAULT 'manual';
     CREATE TABLE IF NOT EXISTS followup_emails (

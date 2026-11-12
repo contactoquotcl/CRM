@@ -166,7 +166,7 @@ async function askDataThenHandoff(session, motivo, resumen, intro) {
   if (!falta.length || session.data_asks >= 1 || !llmEnabled()) return handoffTurn(session, motivo, resumen);
   session.data_asks += 1;
   session.pending_handoff = `${motivo}|${resumen}`.slice(0, 500);
-  await query('UPDATE chat_sessions SET data_asks=data_asks+1, pending_handoff=$2 WHERE id=$1', [session.id, session.pending_handoff]);
+  await query('UPDATE chat_sessions SET data_asks=data_asks+1, pending_handoff=$2, pending_at=now(), pending_alerted_at=NULL WHERE id=$1', [session.id, session.pending_handoff]);
   const reply = `${intro} Para que te atienda mejor, ¿me compartes en un solo mensaje: ${falta.join(', ')}? Si prefieres no darlos, escribe "sin datos" y te derivo igual.`;
   await say(session, reply);
   return { replies: [{ role: 'assistant', content: reply }], status: 'bot', handoff: false };
