@@ -348,6 +348,9 @@ export async function initDb() {
     ALTER TABLE followup_emails ADD COLUMN IF NOT EXISTS quote_number TEXT NOT NULL DEFAULT '';
     ALTER TABLE leads ADD COLUMN IF NOT EXISTS follow_mode TEXT NOT NULL DEFAULT 'manual';
     UPDATE leads SET follow_mode = q.follow_mode FROM quotes q WHERE q.lead_id = leads.id AND q.follow_mode <> 'manual' AND leads.follow_mode = 'manual';
+    ALTER TABLE leads ADD COLUMN IF NOT EXISTS follow_sched_at TIMESTAMPTZ;
+    ALTER TABLE leads ADD COLUMN IF NOT EXISTS follow_sched_step TEXT NOT NULL DEFAULT '';
+    ALTER TABLE leads ADD COLUMN IF NOT EXISTS follow_sched_by INTEGER;
     CREATE INDEX IF NOT EXISTS followup_lead_idx ON followup_emails(lead_id, id);
     CREATE INDEX IF NOT EXISTS followup_quote_idx ON followup_emails(quote_id, id);
   `);

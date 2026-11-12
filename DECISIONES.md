@@ -77,3 +77,8 @@ Caso Nunhems Chile SpA: con todos los datos y el producto confirmado, el modelo 
 
 ### 36. El seguimiento se basa en los leads del pipeline (11 nov 2026)
 Había 179 leads en «Cotizado» pero solo 20 con cotización registrada en el sistema (el resto son cotizaciones antiguas con N° y sin registro, o derivaciones del chat). Ahora el seguimiento lista todos los leads en Cotizado / Seguimiento 1 / Seguimiento 2 que tengan N° de cotización o cotización registrada. Si hay registro se adjunta el PDF; si no, el correo sale sin adjunto y sin las frases de monto/adjunto. El modo (manual/automático/pausado) y el historial se guardan por lead. Las derivaciones del chat sin cotizar no se incluyen (se informa cuántas son). Leads sin correo válido aparecen marcados y no se pueden enviar.
+
+## 37. Envíos de seguimiento programados
+- En Seguimiento se pueden seleccionar cotizaciones y «Programar envío» para una fecha/hora (futura, máx. 90 días). Se guarda en `leads.follow_sched_*`.
+- El job (cada 15 min) envía lo vencido con `trigger='programado'` y avanza la etapa; antes revisa respuestas. Si cambió la etapa o está pausado, se cancela; si se alcanza el límite diario, queda para el siguiente ciclo; error → se limpia la programación.
+- Limitación: Render free duerme; el envío sale al despertar el servicio (≈15 min de granularidad).

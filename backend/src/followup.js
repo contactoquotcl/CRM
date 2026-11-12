@@ -31,7 +31,7 @@ const ROWS_SQL = `
          COALESCE(q.total, NULLIF(l.total,0), 0) AS total,
          COALESCE(q.quote_date::text, l.lead_date::text, l.state_date::text) AS quote_date,
          COALESCE(q.validity_days, 30) AS validity_days,
-         l.follow_mode, COALESCE(NULLIF(q.channel,''), l.channel) AS channel,
+         l.follow_mode, l.follow_sched_at, l.follow_sched_step, COALESCE(NULLIF(q.channel,''), l.channel) AS channel,
          s.name AS state_name, l.state_date::text AS state_date,
          (SELECT COUNT(*)::int FROM followup_emails f WHERE f.lead_id=l.id AND f.status='enviado') AS sent_count,
          (SELECT row_to_json(x) FROM (SELECT step, status, error, created_at, trigger FROM followup_emails f WHERE f.lead_id=l.id ORDER BY f.id DESC LIMIT 1) x) AS last_email
@@ -117,6 +117,7 @@ export async function advance(leadId, { userId = null, trigger = 'manual' } = {}
   const move = async (note) => {
     await query('UPDATE leads SET state_id=$1, state_date=$2, comments=$3, updated_at=now() WHERE id=$4',
       [stateId, today(), [q.lead_comments, `[${today()}] ${note}`].filter(Boolean).join('\n'), q.lead_id]);
+    await query("UPDATE leads SET follow_sched_at=NULL, follow_sched_step='' WHERE id=$1", [q.lead_id]);
     if (step.key === 'close') await query("UPDATE leads SET follow_mode='manual' WHERE id=$1", [q.lead_id]);
   };
   if (wantsMail) {
@@ -130,7 +131,7 @@ export async function advance(leadId, { userId = null, trigger = 'manual' } = {}
       const pdf = q.quote_id ? await quotePdfBuffer(q.quote_id) : null;
       const r = await sendMail({ to: q.email, subject, text, attachments: pdf ? [{ filename: `Cotizacion-${pdf.number}.pdf`, content: pdf.buffer }] : [] });
       await log('enviado', subject, '', r.id, r.provider, r.threadId || '');
-      await move(`Correo "${step.label}" enviado a ${q.email} (${trigger === 'auto' ? 'automático' : 'manual'}). Etapa: ${step.from} → ${step.to}.`);
+      await move(`Correo "${step.label}" enviado a ${q.email} (${{ auto: 'automático', programado: 'programado' }[trigger] || 'manual'}). Etapa: ${step.from} → ${step.to}.`);
       return res(true, `Enviado a ${q.email}${pdf ? '' : ' (sin PDF: cotización antigua sin registro)'}; ahora en ${step.to}`, { to_state: step.to });
     } catch (e) {
       await log('error', subject, String(e.message || e));
@@ -173,17 +174,60 @@ export async function checkReplies() {
   return out;
 }
 
+/** Programa el envío de la etapa actual para una fecha/hora (solo manuales: el modo automático usa los días de cada etapa). */
+export async function schedule(leadIds, at, userId) {
+  const when = new Date(at);
+  if (Number.isNaN(+when)) throw new Error('Fecha inválida');
+  if (when.getTime() < Date.now() + 60 * 1000) throw new Error('La fecha debe ser futura');
+  if (when.getTime() > Date.now() + 90 * 86400000) throw new Error('Máximo 90 días hacia adelante');
+  const out = [];
+  for (const id of leadIds) {
+    const q = await load(id);
+    const step = q && !q.notfollow ? stepFrom(q.state_name) : null;
+    if (!step) { out.push({ lead_id: id, ok: false, message: 'No está en una etapa de seguimiento' }); continue; }
+    if (q.follow_mode === 'pausado') { out.push({ lead_id: id, number: q.number, ok: false, message: 'Seguimiento pausado' }); continue; }
+    if (step.key !== 'close' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(q.email || '')) { out.push({ lead_id: id, number: q.number, ok: false, message: 'Sin correo válido' }); continue; }
+    await query('UPDATE leads SET follow_sched_at=$1, follow_sched_step=$2, follow_sched_by=$3 WHERE id=$4', [when.toISOString(), step.key, userId, id]);
+    out.push({ lead_id: id, number: q.number, ok: true, message: `Programado (${step.label})` });
+  }
+  return out;
+}
+export async function unschedule(leadIds) {
+  await query("UPDATE leads SET follow_sched_at=NULL, follow_sched_step='' WHERE id = ANY($1::int[])", [leadIds]);
+}
+
+/** Envía lo programado que ya llegó a su hora. Si cambió la etapa o se pausó, se cancela. Si se alcanzó el límite diario, queda para el siguiente ciclo. */
+export async function runScheduled() {
+  const { rows } = await query("SELECT id, follow_sched_step, follow_sched_by, follow_sched_at FROM leads WHERE follow_sched_at IS NOT NULL AND follow_sched_at <= now() ORDER BY follow_sched_at LIMIT 100");
+  const out = [];
+  for (const r of rows) {
+    const q = await load(r.id);
+    const step = q && !q.notfollow ? stepFrom(q.state_name) : null;
+    if (!step || step.key !== r.follow_sched_step || q.follow_mode === 'pausado') {
+      await query("UPDATE leads SET follow_sched_at=NULL, follow_sched_step='' WHERE id=$1", [r.id]);
+      out.push({ lead_id: r.id, ok: false, message: 'Programación cancelada: cambió la etapa o está pausado' });
+      continue;
+    }
+    const res = await advance(r.id, { userId: r.follow_sched_by, trigger: 'programado' });
+    out.push(res);
+    if (res.message.startsWith('Límite diario')) break; // se reintenta en el siguiente ciclo
+    if (!res.ok) await query("UPDATE leads SET follow_sched_at=NULL, follow_sched_step='' WHERE id=$1", [r.id]);
+  }
+  return out;
+}
+
 let running = false;
 /** Envía los seguimientos automáticos que ya les toca (leads en modo "auto"). */
 export async function runAuto({ force = false } = {}) {
   if (running || !mailEnabled()) return [];
   await checkReplies().catch((e) => console.error('[seguimiento] respuestas:', e.message));
+  const sched = await runScheduled().catch((e) => { console.error('[seguimiento] programados:', e.message); return []; });
   const st = await getSettings();
-  if (!force && st.followup_business_hours !== '0' && !inBusinessHours()) return [];
+  if (!force && st.followup_business_hours !== '0' && !inBusinessHours()) return sched;
   running = true;
   try {
     const { rows } = await queue({ channel: 'all' });
-    const out = [];
+    const out = [...sched];
     for (const r of rows) {
       if (r.follow_mode !== 'auto' || !r.due || r.problems.length) continue;
       const res = await advance(r.lead_id, { trigger: 'auto' });

@@ -197,3 +197,32 @@ test('leads antiguos con N° de cotización (sin registro) entran al seguimiento
   assert.equal(await stateOf(old), 'Seguimiento 1');
   assert.equal((await api('POST', '/api/followups/send', { body: { lead_ids: [deriv] } })).data.sent, 0);
 });
+
+test('programar envíos manuales: se envían a su hora, se pueden cancelar y no salen si cambió la etapa', async () => {
+  await api('PUT', '/api/integrations', { body: { values: { EMAIL_PROVIDER: 'resend', RESEND_API_KEY: 're_testkey' } } });
+  const a = await mkQuote('prog1@acme.cl');
+  const b = await mkQuote('prog2@acme.cl');
+  const c = await mkQuote('prog3@acme.cl');
+  const past = (await api('POST', '/api/followups/schedule', { body: { lead_ids: [a.lead_id], at: new Date(Date.now() - 3600000).toISOString() } }));
+  assert.equal(past.status, 400);
+  const at = new Date(Date.now() + 3600000).toISOString();
+  const r = (await api('POST', '/api/followups/schedule', { body: { lead_ids: [a.lead_id, b.lead_id, c.lead_id], at } })).data;
+  assert.equal(r.scheduled, 3);
+  assert.ok((await api('GET', '/api/followups')).data.rows.find((x) => x.lead_id === a.lead_id).follow_sched_at);
+  await api('POST', '/api/followups/unschedule', { body: { lead_ids: [c.lead_id] } });
+  // aún no es la hora: no se envía nada
+  const before = fakes.state.mails.length;
+  await api('POST', '/api/followups/run-auto');
+  assert.equal(fakes.state.mails.length, before);
+  // llega la hora (a y c; b cambia de etapa a mano antes)
+  await query("UPDATE leads SET follow_sched_at = now() - interval '1 minute' WHERE id = ANY($1)", [[a.lead_id, b.lead_id]]);
+  const s1 = (await query("SELECT id FROM pipeline_states WHERE name='Seguimiento 2'")).rows[0].id;
+  await query('UPDATE leads SET state_id=$1 WHERE id=$2', [s1, b.lead_id]);
+  const run = (await api('POST', '/api/followups/run-auto')).data;
+  assert.equal(run.sent, 1);
+  assert.equal(await stateOf(a.lead_id), 'Seguimiento 1');
+  assert.equal(await stateOf(b.lead_id), 'Seguimiento 2');
+  assert.equal(await stateOf(c.lead_id), 'Cotizado');
+  assert.equal((await query("SELECT trigger FROM followup_emails WHERE lead_id=$1 AND status='enviado'", [a.lead_id])).rows[0].trigger, 'programado');
+  assert.equal((await query('SELECT follow_sched_at FROM leads WHERE id=$1', [b.lead_id])).rows[0].follow_sched_at, null);
+});

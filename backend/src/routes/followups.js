@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { authenticate } from '../auth.js';
 import { HttpError } from '../util.js';
 import { query } from '../db.js';
-import { queue, advance, preview, history, runAuto, checkReplies } from '../followup.js';
+import { queue, advance, preview, history, runAuto, checkReplies, schedule, unschedule } from '../followup.js';
 
 export const followupsRouter = Router();
 followupsRouter.use(authenticate);
@@ -46,4 +46,19 @@ followupsRouter.post('/run-auto', async (_req, res) => {
 followupsRouter.post('/check-replies', async (_req, res) => {
   const replied = await checkReplies();
   res.json({ replied, count: replied.length });
+});
+
+// Programar el envío manual para una fecha y hora (se envía solo, aunque no haya nadie conectado).
+followupsRouter.post('/schedule', async (req, res) => {
+  const list = ids(req.body);
+  if (!list.length) throw new HttpError(400, 'Selecciona al menos una');
+  let results;
+  try { results = await schedule(list, req.body?.at, req.user.id); } catch (e) { throw new HttpError(400, e.message); }
+  res.json({ results, scheduled: results.filter((r) => r.ok).length, failed: results.filter((r) => !r.ok).length });
+});
+followupsRouter.post('/unschedule', async (req, res) => {
+  const list = ids(req.body);
+  if (!list.length) throw new HttpError(400, 'Selecciona al menos una');
+  await unschedule(list);
+  res.json({ ok: true, updated: list.length });
 });

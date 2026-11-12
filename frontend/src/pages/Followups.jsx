@@ -20,6 +20,7 @@ export default function Followups() {
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState(null); // { preview, ids }
   const [results, setResults] = useState(null);
+  const [sched, setSched] = useState(null); // { ids, at }
 
   const load = useCallback(async () => {
     try {
@@ -50,6 +51,22 @@ export default function Followups() {
       const r = await api.post('/api/followups/send', { lead_ids: confirm.ids });
       setConfirm(null); setResults(r); setSel(new Set()); await load();
     } catch (e) { setError(e.message); setConfirm(null); } finally { setBusy(false); }
+  };
+  const openSched = () => {
+    const d = new Date(Date.now() + 86400000); d.setHours(9, 0, 0, 0);
+    const pad = (n) => String(n).padStart(2, '0');
+    setSched({ ids, at: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}` });
+  };
+  const doSched = async () => {
+    setBusy(true); setError('');
+    try {
+      const r = await api.post('/api/followups/schedule', { lead_ids: sched.ids, at: new Date(sched.at).toISOString() });
+      setSched(null); setSel(new Set()); setResults({ sent: r.scheduled, failed: r.failed, results: r.results, scheduled: true }); await load();
+    } catch (e) { setError(e.message); } finally { setBusy(false); }
+  };
+  const unsched = async () => {
+    setError(''); setMsg('');
+    try { await api.post('/api/followups/unschedule', { lead_ids: ids }); setMsg('Programación cancelada.'); setSel(new Set()); await load(); } catch (e) { setError(e.message); }
   };
   const setMode = async (mode) => {
     setError(''); setMsg('');
@@ -90,6 +107,8 @@ export default function Followups() {
             <button className="btn primary" disabled={!ids.length || busy} onClick={openConfirm}>
               {stage === 'Seguimiento 2' ? `Archivar${data?.send_on_archive ? ' y avisar' : ''} (${ids.length})` : `Enviar ${next || 'seguimiento'} y avanzar (${ids.length})`}
             </button>
+            <button className="btn" disabled={!ids.length || busy} onClick={openSched} title="Elige fecha y hora; se envía solo y avanza de etapa">Programar envío</button>
+            <button className="btn" disabled={!ids.length} onClick={unsched}>Cancelar programación</button>
             <button className="btn" disabled={!ids.length} onClick={() => setMode('auto')}>Activar automático</button>
             <button className="btn" disabled={!ids.length} onClick={() => setMode('pausado')}>Pausar (cliente respondió)</button>
             <button className="btn" disabled={!ids.length} onClick={() => setMode('manual')}>Volver a manual</button>
@@ -101,7 +120,7 @@ export default function Followups() {
             <table>
               <thead><tr>
                 <th><input type="checkbox" checked={allSel} onChange={() => setSel(allSel ? new Set() : new Set(rows.map((r) => r.lead_id)))} aria-label="Seleccionar todas" /></th>
-                <th>N°</th><th>Cliente</th><th>Contacto / correo</th><th className="num">Total c/IVA</th><th>En etapa</th><th>Toca</th><th>Modo</th><th>Último correo</th>
+                <th>N°</th><th>Cliente</th><th>Contacto / correo</th><th className="num">Total c/IVA</th><th>En etapa</th><th>Toca / programado</th><th>Modo</th><th>Último correo</th>
               </tr></thead>
               <tbody>
                 {rows.map((r) => (
@@ -112,7 +131,7 @@ export default function Followups() {
                     <td>{r.contact}<div className="muted small">{r.email || '—'}</div>{r.problems.map((p) => <Badge key={p} color="#dc2626">{p}</Badge>)}</td>
                     <td className="num">{r.total > 0 ? clp(r.total) : '—'}</td>
                     <td>{r.days_in_state} d</td>
-                    <td>{r.due ? <Badge color="#16a34a">ya toca</Badge> : <span className="muted">en {r.due_in_days} d</span>}</td>
+                    <td>{r.due ? <Badge color="#16a34a">ya toca</Badge> : <span className="muted">en {r.due_in_days} d</span>}{r.follow_sched_at && <div><Badge color="#7c3aed">Programado</Badge><div className="small">{fmtDT(r.follow_sched_at)}</div></div>}</td>
                     <td><Badge color={MODE[r.follow_mode]?.[1]}>{MODE[r.follow_mode]?.[0] || r.follow_mode}</Badge></td>
                     <td className="small">{r.last_email ? <>{STEP_LABEL[r.last_email.step]} · {r.last_email.status}<br /><span className="muted">{fmtDT(r.last_email.created_at)}</span></> : <span className="muted">—</span>}</td>
                   </tr>
@@ -137,7 +156,7 @@ export default function Followups() {
                   <td>{l.to_email || '—'}</td>
                   <td className="small">{l.subject}</td>
                   <td><Badge color={l.status === 'enviado' ? '#16a34a' : l.status === 'error' ? '#dc2626' : '#64748b'}>{l.status}</Badge>{l.error && <div className="small" style={{ color: '#dc2626' }}>{l.error}</div>}</td>
-                  <td className="small">{l.trigger === 'auto' ? 'Automático' : l.sent_by_name || 'Manual'}</td>
+                  <td className="small">{l.trigger === 'auto' ? 'Automático' : l.trigger === 'programado' ? 'Programado' : l.sent_by_name || 'Manual'}</td>
                 </tr>
               ))}
               {!log.length && <tr><td colSpan="7" className="muted">Aún no hay envíos.</td></tr>}
@@ -167,8 +186,16 @@ export default function Followups() {
           )}
         </Modal>
       )}
+      {sched && (
+        <Modal title={`Programar envío (${sched.ids.length})`} onClose={() => setSched(null)}>
+          <p>Se enviará el correo de <strong>{stage}</strong> con su PDF y la cotización avanzará de etapa automáticamente a esa hora.</p>
+          <label className="field"><span>Fecha y hora</span><input type="datetime-local" value={sched.at} onChange={(e) => setSched({ ...sched, at: e.target.value })} /></label>
+          <p className="muted small">El envío sale dentro de ~15 min de la hora elegida y solo si el servidor está activo. Se cancela si cambias la etapa o pausas la cotización; respeta el límite diario.</p>
+          <div className="modal-actions"><button className="btn" onClick={() => setSched(null)}>Cancelar</button><button className="btn primary" disabled={busy || !sched.at} onClick={doSched}>Programar</button></div>
+        </Modal>
+      )}
       {results && (
-        <Modal title={`Resultado: ${results.sent} listas, ${results.failed} con problemas`} onClose={() => setResults(null)}>
+        <Modal title={`${results.scheduled ? 'Programadas' : 'Resultado'}: ${results.sent} ${results.scheduled ? '' : 'listas'}, ${results.failed} con problemas`} onClose={() => setResults(null)}>
           <ul className="stack" style={{ paddingLeft: 18 }}>
             {results.results.map((r) => <li key={r.lead_id} style={{ color: r.ok ? '#166534' : '#b91c1c' }}>N° {r.number}: {r.message}</li>)}
           </ul>
