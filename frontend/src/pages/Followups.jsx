@@ -11,7 +11,7 @@ const fmtDT = (t) => new Date(t).toLocaleString('es-CL', { dateStyle: 'short', t
 
 export default function Followups() {
   const [data, setData] = useState(null);
-  const [channel, setChannel] = useState('ia');
+  const [channel, setChannel] = useState('all');
   const [stage, setStage] = useState('Cotizado');
   const [sel, setSel] = useState(new Set());
   const [log, setLog] = useState([]);
@@ -69,8 +69,8 @@ export default function Followups() {
       <div className="toolbar">
         <h2>Seguimiento de cotizaciones</h2>
         <select value={channel} onChange={(e) => setChannel(e.target.value)} aria-label="Origen">
-          <option value="ia">Solo cotizaciones del bot (IA)</option>
           <option value="all">Todas las cotizaciones</option>
+          <option value="ia">Solo cotizaciones del bot (IA)</option>
         </select>
       </div>
       {data && !data.configured && <Alert>El envío de correos aún no está configurado. Ve a <Link to="/admin">Admin → Integraciones (claves) → Correo de seguimiento</Link> y carga la clave del servicio.</Alert>}
