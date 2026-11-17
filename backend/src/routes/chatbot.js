@@ -28,11 +28,11 @@ chatbotRouter.use(ipLimiter);
 // PDF de una cotización del bot: enlace firmado (id + HMAC), sin sesión. Solo trae datos de venta (sin costo ni margen).
 chatbotRouter.get('/quote-pdf', async (req, res) => {
   const id = Number(req.query.q);
-  if (!Number.isInteger(id) || !verifyPdfSig(id, req.query.s)) throw new HttpError(404, 'Enlace inválido');
+  if (!Number.isInteger(id) || !verifyPdfSig(id, String(req.query.s || '').slice(0, 22))) throw new HttpError(404, 'Enlace inválido');
   const pdf = await quotePdfBuffer(id);
   if (!pdf) throw new HttpError(404, 'Cotización no encontrada');
   res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `inline; filename="Cotizacion-${pdf.number}.pdf"`);
+  res.setHeader('Content-Disposition', `${req.query.dl === '1' ? 'attachment' : 'inline'}; filename="Cotizacion-${pdf.number}.pdf"`);
   res.setHeader('Cache-Control', 'private, max-age=300');
   res.send(pdf.buffer);
 });

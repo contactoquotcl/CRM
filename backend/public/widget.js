@@ -44,6 +44,9 @@
     '.m.agent .who{display:block;font-size:11px;font-weight:600;margin-bottom:2px}' +
     '.m.sys{align-self:center;background:transparent;color:#64748b;font-size:12px;text-align:center}' +
     '.m.temp{opacity:.6}.m a{color:inherit;text-decoration:underline}' +
+    '.file{display:flex;align-items:center;gap:10px;margin:8px 0;padding:10px;border-radius:10px;background:#f1f5f9;color:#0f172a;text-decoration:none!important;border:1px solid #e2e8f0}.file:hover{background:#e2e8f0}' +
+    '.ficon{flex:none;width:38px;height:44px;border-radius:6px;background:#dc2626;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}' +
+    '.finfo{flex:1;min-width:0}.finfo b{display:block;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.finfo small{display:block;font-size:11px;color:#64748b;margin-top:2px}.fdl{flex:none;font-size:18px;color:' + DARK + '}' +
     '.typing{align-self:flex-start;color:#64748b;font-size:13px;padding:2px 6px}' +
     'form{display:flex;gap:8px;padding:10px;border-top:1px solid #e2e8f0;background:#fff}' +
     'textarea{flex:1;resize:none;border:1px solid #cbd5e1;border-radius:10px;padding:9px 10px;font-size:14px;max-height:90px;outline:none}' +
@@ -70,16 +73,36 @@
   var fab = $('.fab'), dot = $('.dot'), panel = $('.panel'), msgs = $('.msgs'), form = $('form'), input = $('textarea'), sendBtn = $('.send');
   $('.head b').textContent = TITLE;
 
+  var PDF_RE = /\/api\/chatbot\/quote-pdf\?/;
+  // El modelo a veces escribe [texto](url): se deja solo la url para no armar enlaces rotos.
+  function cleanMd(t) { return String(t).replace(/\[([^\]]*)\]\((https?:\/\/[^\s)]+)\)/g, function (_, label, url) { return PDF_RE.test(url) ? url : (label && label !== url ? label + ' ' + url : url); }); }
+  function pdfCard(url, text) {
+    var n = (/cotizaci[oó]n[^\d\n]{0,40}?(\d{2,})/i.exec(text) || [])[1];
+    var name = n ? 'Cotización N° ' + n + '.pdf' : 'Cotización Quot.pdf';
+    var a = document.createElement('a');
+    a.className = 'file'; a.href = url + (url.indexOf('dl=1') < 0 ? '&dl=1' : ''); a.target = '_blank'; a.rel = 'noopener noreferrer'; a.setAttribute('download', name);
+    a.innerHTML = '<span class="ficon">PDF</span><span class="finfo"><b></b><small>Documento PDF · toca para descargar</small></span><span class="fdl" aria-hidden="true">⬇</span>';
+    a.querySelector('b').textContent = name;
+    return a;
+  }
   function linkify(el, text) {
-    var re = /(https?:\/\/[^\s<>"')]+)/g, last = 0, m;
+    text = cleanMd(text);
+    var re = /(https?:\/\/[^\s<>"'()\[\]]+)/g, last = 0, m, skipWs = false;
     while ((m = re.exec(text))) {
-      if (m.index > last) el.appendChild(document.createTextNode(text.slice(last, m.index)));
-      var a = document.createElement('a');
-      a.href = m[1]; a.textContent = m[1]; a.target = '_blank'; a.rel = 'noopener noreferrer';
-      el.appendChild(a);
+      var before = text.slice(last, m.index);
+      if (PDF_RE.test(m[1])) before = before.replace(/\s+$/, '');
+      if (before) el.appendChild(document.createTextNode(before));
+      if (PDF_RE.test(m[1])) { el.appendChild(pdfCard(m[1], text)); skipWs = true; }
+      else {
+        var a = document.createElement('a');
+        a.href = m[1]; a.textContent = m[1]; a.target = '_blank'; a.rel = 'noopener noreferrer';
+        el.appendChild(a);
+      }
       last = m.index + m[1].length;
     }
-    if (last < text.length) el.appendChild(document.createTextNode(text.slice(last)));
+    var rest = text.slice(last);
+    if (skipWs) rest = rest.replace(/^\s+/, '');
+    if (rest) el.appendChild(document.createTextNode(rest));
   }
   function bubble(kind, text, opts) {
     var el = document.createElement('div');

@@ -87,3 +87,7 @@ Había 179 leads en «Cotizado» pero solo 20 con cotización registrada en el s
 - Si una conversación derivada pasa N min (default 3) sin mensaje público de un ejecutivo, o el bot deja una tarea pendiente (pidió datos para derivar) sin resolverse en N min, se envía un correo a `alert_email` (default contacto@quot.cl) con motivo, cliente, últimos mensajes y link.
 - Una alerta por derivación (`conversations.alerted_at`, se reinicia en una nueva derivación) y una por tarea pendiente (`chat_sessions.pending_alerted_at`). Posible spam no alerta. Configurable en Admin (activar, correo, minutos).
 - Revisión cada 60 s mientras Render esté despierto (el chat activo lo mantiene despierto). Requiere correo configurado (Integraciones); si falla el envío reintenta en el siguiente ciclo.
+
+## 39. PDF de cotización descargable desde el chat (como archivo adjunto)
+- Causa del error (cotización N° 524, conversación #35): el bot respondió el enlace en markdown `[url](url)` y el widget lo autolinkeaba como una sola URL («url](url»), con firma inválida → 404 «Enlace inválido». El PDF en sí funcionaba.
+- Corrección: el widget normaliza `[texto](url)` y muestra el PDF como tarjeta de archivo (icono PDF, «Cotización N° X.pdf», toca para descargar, estilo WhatsApp); el motor reduce markdown a URL; el prompt pide la URL sola; `/api/chatbot/quote-pdf?dl=1` fuerza descarga (`attachment`) y tolera basura tras la firma (22 caracteres).

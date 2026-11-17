@@ -367,6 +367,11 @@ test('fase 2 · cotización del bot: motor único, lead en Cotizado, PDF sin cos
   assert.match(text, /DATOSPARATRANSFERENCIA/);
   assert.doesNotMatch(text, /300\.000|margen|costo/i);
   assert.equal((await fetch(link.replace(/s=.{3}/, 's=xxx'))).status, 404, 'firma adulterada');
+  const dl = await fetch(`${link}&dl=1`);
+  assert.match(dl.headers.get('content-disposition'), /^attachment; filename="Cotizacion-/, 'dl=1 fuerza descarga');
+  assert.match(pdf.headers.get('content-disposition'), /^inline/);
+  assert.equal((await fetch(`${link}](${link})`)).status, 200, 'enlaces markdown mal formados siguen sirviendo el PDF');
+  assert.equal(sanitizeUrls(`Aquí: [${link}](${link})`), `Aquí: ${link}`, 'markdown [url](url) se reduce a la url');
   assert.equal((await fetch(`${base}/api/chatbot/quote-pdf?q=${q.id + 1}&s=${link.split('s=')[1]}`)).status, 404, 'firma de otra cotización');
 
   // Modo "margen": precio = costo de la maestra / (1 − margen por defecto)

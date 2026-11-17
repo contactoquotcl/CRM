@@ -120,6 +120,7 @@ export function sanitizeUrls(text) {
   const hosts = allowedHosts();
   let apiHost = '';
   try { apiHost = apiPublicUrl() ? new URL(apiPublicUrl()).hostname : ''; } catch { /* ignorar */ }
+  text = text.replace(/\[[^\]]*\]\((https?:\/\/[^\s)]+)\)/gi, '$1'); // [texto](url) → url
   return text.replace(/https?:\/\/[^\s)>\]]+/gi, (u) => {
     try {
       const url = new URL(u);
