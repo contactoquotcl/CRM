@@ -104,3 +104,8 @@ Había 179 leads en «Cotizado» pero solo 20 con cotización registrada en el s
 
 ## 42. Cotizaciones del bot siempre primeras en «Cotizado»
 - Al generar una cotización por el bot, su lead se ubica en el primer lugar de la etapa inicial (`sort_order` menor que cualquier otro de la etapa; la más reciente arriba), incluso sobre leads manuales creados después. Una sola vez al desplegar, las cotizaciones del bot que ya estaban en «Cotizado» también pasan arriba. Si alguien reordena la columna arrastrando, el orden manual manda hasta la siguiente cotización del bot.
+
+## 43. Arranque resiliente ante caídas de Postgres (incidente 19-nov, 20:27–20:37)
+- Causa: Render reinició/mantuvo la base (`quot-crm-db`) y el host interno no resolvió (`getaddrinfo ENOTFOUND dpg-…`). `initDb()` lanzó el error al arrancar, el proceso salió con código 1 y Render lo reinició en bucle hasta que la base volvió (~10 min sin chatbot ni CRM). No fue un error de código ni de la última publicación.
+- Corrección: `server.js` abre el puerto de inmediato (responde 503 «iniciando» con CORS) y reintenta la conexión a la base cada 10 s (hasta 60 veces, `DB_CONNECT_TRIES`); el pool tiene `connectionTimeout`, `keepAlive` y manejador de errores de conexiones inactivas (antes un reinicio de Postgres podía tumbar el proceso).
+- Límite: no evita la caída de la base; solo que la API se recupere sola apenas vuelva. Con el plan gratis sigue durmiendo y la base gratis vence ~19–20 nov 2026 → subir API a starter y Postgres de pago.

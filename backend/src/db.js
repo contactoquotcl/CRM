@@ -164,7 +164,11 @@ export async function initDb() {
     const pool = new pg.Pool({
       connectionString: process.env.DATABASE_URL,
       ssl: process.env.PGSSL === 'require' ? { rejectUnauthorized: false } : false,
+      connectionTimeoutMillis: 15000,
+      keepAlive: true,
     });
+    // Si Postgres se reinicia, los clientes inactivos emiten 'error'; sin este manejador el proceso caería.
+    pool.on('error', (e) => console.error('[db] error en conexión inactiva:', e.message));
     impl = {
       query: (t, p) => pool.query(t, p),
       exec: (sql) => pool.query(sql),
