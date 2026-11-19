@@ -91,6 +91,14 @@ export async function createQuote(b, { userId, channel = 'Cotizador', conversati
       leadId = ins.rows[0].id;
     }
 
+    // Las cotizaciones del bot quedan siempre en el primer lugar de su etapa (visibles de inmediato)
+    if (channel === 'Chatbot') {
+      await t.query(
+        `UPDATE leads SET sort_order = (SELECT LEAST(0, COALESCE(MIN(sort_order), 0)) - 1 FROM leads WHERE state_id IS NOT DISTINCT FROM $1 AND id <> $2) WHERE id = $2`,
+        [initialState, leadId]
+      );
+    }
+
     const q = await t.query(
       `INSERT INTO quotes(number, lead_id, quote_date, validity_days, rut, razon_social, email, contact, phone, notes, iva_rate, margin_pct, subtotal, iva, total, created_by, channel, conversation_id)
        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING id`,

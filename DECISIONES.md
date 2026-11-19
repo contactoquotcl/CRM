@@ -101,3 +101,6 @@ Había 179 leads en «Cotizado» pero solo 20 con cotización registrada en el s
 - Si faltan, el bot los pide (una vez completa y una vez solo los faltantes). Si el cliente se niega («sin datos», «no quiero…») o no los entrega, **no se deriva**: se le indica que sin esos datos no se puede completar la derivación y que puede escribir a contacto@quot.cl. La herramienta `derivar_ejecutivo` rechaza si faltan datos (se retiró `sin_datos`).
 - Una tarea pendiente (datos solicitados) dispara la alerta por correo si el cliente no responde en N min (decisión 38).
 - Contrapartida a vigilar: un cliente molesto que no quiera dar datos queda sin derivar y con el correo de contacto.
+
+## 42. Cotizaciones del bot siempre primeras en «Cotizado»
+- Al generar una cotización por el bot, su lead se ubica en el primer lugar de la etapa inicial (`sort_order` menor que cualquier otro de la etapa; la más reciente arriba), incluso sobre leads manuales creados después. Una sola vez al desplegar, las cotizaciones del bot que ya estaban en «Cotizado» también pasan arriba. Si alguien reordena la columna arrastrando, el orden manual manda hasta la siguiente cotización del bot.

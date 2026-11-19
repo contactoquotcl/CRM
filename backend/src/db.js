@@ -219,6 +219,19 @@ export async function initDb() {
     await impl.query("INSERT INTO settings(key,value) VALUES('leads_order_initialized','1') ON CONFLICT (key) DO NOTHING");
   }
 
+  // Una sola vez: las cotizaciones del bot que hoy están en la etapa inicial pasan al primer lugar (la más reciente arriba).
+  const topFlag = await impl.query("SELECT 1 FROM settings WHERE key='bot_quotes_top_initialized'");
+  if (!topFlag.rows.length) {
+    await impl.exec(`
+      UPDATE leads l SET sort_order = r.rn - (r.k + 1)
+      FROM (SELECT ld.id, ROW_NUMBER() OVER (ORDER BY ld.quote_number DESC NULLS LAST, ld.id DESC)::int AS rn, COUNT(*) OVER ()::int AS k
+              FROM leads ld JOIN pipeline_states s ON s.id = ld.state_id
+             WHERE s.is_initial AND ld.channel = 'Chatbot' AND ld.quote_number IS NOT NULL) r
+      WHERE r.id = l.id;
+    `);
+    await impl.query("INSERT INTO settings(key,value) VALUES('bot_quotes_top_initialized','1') ON CONFLICT (key) DO NOTHING");
+  }
+
   await impl.exec(`
     CREATE TABLE IF NOT EXISTS catalog_products (
       id SERIAL PRIMARY KEY,

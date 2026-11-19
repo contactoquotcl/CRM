@@ -366,6 +366,10 @@ test('fase 2 · cotización del bot: motor único, lead en Cotizado, PDF sin cos
   assert.match(q.notes, /Región Metropolitana/);
   const lead = (await query('SELECT l.channel, s.name AS state, l.quote_number FROM leads l JOIN pipeline_states s ON s.id=l.state_id WHERE l.id=$1', [q.lead_id])).rows[0];
   assert.deepEqual([lead.channel, lead.state, lead.quote_number], ['Chatbot', 'Cotizado', before]);
+  // La cotización del bot queda en el primer lugar de «Cotizado», incluso sobre un lead manual creado después
+  await query("INSERT INTO leads(client_name, channel, state_id, state_date, sort_order) VALUES('Lead manual', 'Manual', (SELECT id FROM pipeline_states WHERE is_initial LIMIT 1), CURRENT_DATE, 0)");
+  const board = (await api('GET', '/api/leads', { token: admin })).data.filter((l) => l.state_name === 'Cotizado');
+  assert.equal(board[0].quote_number, before, 'primero en Cotizado');
   const item = (await query('SELECT cost, unit_price, margin_pct FROM quote_items WHERE quote_id=$1', [q.id])).rows[0];
   assert.deepEqual([item.cost, item.unit_price], [300000, 389990]); // costo de la maestra; precio = tienda
   assert.equal(Math.round(item.margin_pct), 23);
