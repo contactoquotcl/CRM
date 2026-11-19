@@ -6,7 +6,7 @@ import { clp, fmtDate } from '../util.js';
 
 const STAGES = ['Cotizado', 'Seguimiento 1', 'Seguimiento 2'];
 const MODE = { manual: ['Manual', '#64748b'], auto: ['Automático', '#16a34a'], pausado: ['Pausado', '#b45309'] };
-const STEP_LABEL = { s1: 'Seguimiento 1', s2: 'Seguimiento 2', close: 'Archivado', reply: 'Respuesta del cliente' };
+const STEP_LABEL = { s1: 'Seguimiento 1', s2: 'Seguimiento 2', close: 'Archivado', reply: 'Respuesta del cliente', quote: 'Cotización enviada' };
 const fmtDT = (t) => new Date(t).toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short' });
 
 export default function Followups() {
@@ -156,7 +156,7 @@ export default function Followups() {
                   <td>{l.to_email || '—'}</td>
                   <td className="small">{l.subject}</td>
                   <td><Badge color={l.status === 'enviado' ? '#16a34a' : l.status === 'error' ? '#dc2626' : '#64748b'}>{l.status}</Badge>{l.error && <div className="small" style={{ color: '#dc2626' }}>{l.error}</div>}</td>
-                  <td className="small">{l.trigger === 'auto' ? 'Automático' : l.trigger === 'programado' ? 'Programado' : l.sent_by_name || 'Manual'}</td>
+                  <td className="small">{l.trigger === 'auto' ? 'Automático' : l.trigger === 'bot' ? 'Bot (al cotizar)' : l.trigger === 'programado' ? 'Programado' : l.sent_by_name || 'Manual'}</td>
                 </tr>
               ))}
               {!log.length && <tr><td colSpan="7" className="muted">Aún no hay envíos.</td></tr>}

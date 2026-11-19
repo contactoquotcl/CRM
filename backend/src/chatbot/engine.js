@@ -10,8 +10,8 @@ import { systemPrompt } from './prompt.js';
 import { detectSpam, spamEnabled } from './spam.js';
 import { handoff as doHandoffInbox, mirrorMessage, setConversationStatus, getConversation } from '../inbox.js';
 
-export const WELCOME = '¡Hola! Soy el asistente virtual de Quot. Puedo ayudarte a encontrar productos (etiquetas, impresoras Zebra, lectores, stretch film y más), revisar precios y stock, o conectarte con un ejecutivo. ¿En qué te ayudo?';
-const HANDOFF_REPLY = 'Listo, te derivé con un ejecutivo de Quot. Te responderá por este mismo chat en cuanto pueda. Si quieres, ve dejando aquí tu nombre, correo o teléfono y lo que necesitas.';
+export const WELCOME = '¡Hola! Soy el asistente virtual de Quot. Puedo ayudarte a encontrar productos (etiquetas, impresoras Zebra, lectores, stretch film y más), revisar precios y stock, o derivarte con un ejecutivo. ¿En qué te ayudo?';
+const HANDOFF_REPLY = 'Listo, derivé tu solicitud a un ejecutivo de Quot. Se pondrá en contacto contigo por correo o WhatsApp con los datos que nos dejaste. Si aún no nos diste tu correo o teléfono, escríbelos aquí para poder contactarte.';
 const GUARD_REPLY = 'Para darte un valor exacto prefiero que lo confirme un ejecutivo. ¿Quieres que te derive con uno?';
 const ERROR_REPLY = 'Tuve un problema técnico para responderte. ¿Puedes intentar de nuevo?';
 
@@ -209,10 +209,10 @@ export async function handleUserMessage(session, rawText) {
   }
   if (await spamEnabled()) {
     const why = await detectSpam(session, text);
-    if (why) return handoffTurn(session, 'posible_spam', `Posible spam: ${why}. Revisa y, si es spam, resuelve la conversación.`, 'Recibí tu mensaje. Lo derivé a un ejecutivo de Quot, que te responderá por aquí si corresponde.', true);
+    if (why) return handoffTurn(session, 'posible_spam', `Posible spam: ${why}. Revisa y, si es spam, resuelve la conversación.`, 'Recibí tu mensaje. Lo derivé a un ejecutivo de Quot, que se contactará contigo por correo o WhatsApp si corresponde.', true);
   }
-  if (frustrated(text, n)) return handoffTurn(session, 'frustracion', 'Se detectó frustración o molestia en el mensaje del cliente.', 'Lamento la molestia. Te derivé de inmediato con un ejecutivo de Quot para que te atienda personalmente por este chat.');
-  if (!llmEnabled()) return handoffTurn(session, 'otro', 'El asistente de IA no está configurado; atención directa.', 'Ahora mismo no puedo responder automáticamente, pero ya avisé a un ejecutivo de Quot: te responderá por este chat.');
+  if (frustrated(text, n)) return handoffTurn(session, 'frustracion', 'Se detectó frustración o molestia en el mensaje del cliente.', 'Lamento la molestia. Derivé tu caso a un ejecutivo de Quot, que se contactará contigo por correo o WhatsApp para atenderte personalmente.');
+  if (!llmEnabled()) return handoffTurn(session, 'otro', 'El asistente de IA no está configurado; atención directa.', 'Ahora mismo no puedo responder automáticamente, pero ya avisé a un ejecutivo de Quot, que se contactará contigo por correo o WhatsApp. Déjame aquí tu correo o teléfono y lo que necesitas.');
 
   // Historial reciente → mensajes alternados user/assistant
   const hist = (await query("SELECT role, content FROM chat_messages WHERE session_id=$1 AND role IN ('user','assistant') ORDER BY id DESC LIMIT 30", [session.id])).rows.reverse();

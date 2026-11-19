@@ -4,6 +4,7 @@ import { botConfig, wcConfig, apiPublicUrl, chatbotTokenSecret } from '../config
 import { wcEnabled, wcGetProduct, wcFindBySku } from '../woo.js';
 import { wcToRow, priceInfo } from '../catalog.js';
 import { createQuote } from '../quoteService.js';
+import { sendQuoteEmail } from '../followup.js';
 import { ensureConversation, getBotUserId } from '../inbox.js';
 import { clp, priceFromCost } from '../util.js';
 
@@ -135,12 +136,15 @@ export async function generarCotizacion(args, ctx) {
     ...(base ? { link_pdf: `${base}/api/chatbot/quote-pdf?${pdfLinkParams(q.id)}` } : { nota_pdf: 'El PDF queda disponible para el ejecutivo; el cliente lo recibirá de él.' }),
     pago: 'El PDF incluye los datos para pagar por transferencia.',
   };
+  // Copia automática al correo registrado (con el PDF adjunto); si falla, el bot igual entrega el enlace
+  const mail = await sendQuoteEmail(q.id, { trigger: 'bot' });
+  if (mail.ok) out.correo_enviado = `La cotización también se envió con el PDF adjunto a ${mail.to}.`;
   // Monto sobre el umbral: se genera igual, pero se deriva a un ejecutivo para el seguimiento
   const threshold = Number(s.bot_quote_handoff_clp) || 0;
   if (threshold > 0 && q.total >= threshold) {
     await ctx.handoff({ motivo: 'cotizacion', resumen: `Cotización N° ${q.number} por ${clp(q.total)} con IVA (sobre el umbral de ${clp(threshold)}). Requiere seguimiento comercial.` });
     out.derivado = true;
-    out.instruccion = 'Entrega los datos de la cotización e informa que, por el monto, un ejecutivo de Quot la revisará con el cliente y le responderá por este mismo chat.';
+    out.instruccion = 'Entrega los datos de la cotización e informa que, por el monto, un ejecutivo de Quot la revisará y se contactará con el cliente por correo o WhatsApp.';
   }
   return out;
 }

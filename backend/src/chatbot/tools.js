@@ -225,7 +225,7 @@ export async function runTool(name, args, ctx) {
   if (name === 'derivar_ejecutivo') {
     const r = await ctx.handoff(args);
     if (r && r.ok === false) return r;
-    return { ok: true, derivado: true, instruccion: 'Informa al cliente, en una o dos frases, que un ejecutivo de Quot le responderá por este mismo chat.', asignado: !!r.assignee };
+    return { ok: true, derivado: true, instruccion: 'Informa al cliente, en una o dos frases, que un ejecutivo de Quot se contactará con él por correo o WhatsApp (no prometas respuesta inmediata ni por este chat).', asignado: !!r.assignee };
   }
   return { ok: false, error: 'Herramienta desconocida' };
 }

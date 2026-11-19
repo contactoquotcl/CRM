@@ -91,3 +91,7 @@ Había 179 leads en «Cotizado» pero solo 20 con cotización registrada en el s
 ## 39. PDF de cotización descargable desde el chat (como archivo adjunto)
 - Causa del error (cotización N° 524, conversación #35): el bot respondió el enlace en markdown `[url](url)` y el widget lo autolinkeaba como una sola URL («url](url»), con firma inválida → 404 «Enlace inválido». El PDF en sí funcionaba.
 - Corrección: el widget normaliza `[texto](url)` y muestra el PDF como tarjeta de archivo (icono PDF, «Cotización N° X.pdf», toca para descargar, estilo WhatsApp); el motor reduce markdown a URL; el prompt pide la URL sola; `/api/chatbot/quote-pdf?dl=1` fuerza descarga (`attachment`) y tolera basura tras la firma (22 caracteres).
+
+## 40. Derivación sin promesa de inmediatez + cotización del bot enviada por correo
+- Todos los textos de derivación (respuestas del motor, herramienta, widget, prompt) dicen que un ejecutivo se contactará **por correo o WhatsApp**, sin prometer respuesta inmediata ni por el mismo chat. Si el ejecutivo responde desde el CRM, el mensaje igual llega al widget.
+- Al generar una cotización el bot, se envía automáticamente al correo registrado con el PDF adjunto (`followup.sendQuoteEmail`), una sola vez por cotización. Queda en Seguimiento → Historial como «Cotización enviada» (origen «Bot»), no cuenta para el límite diario de seguimientos, y si el correo falla el bot igual entrega el enlace. Configurable en Admin (activar, asunto y mensaje). Si el cliente responde ese correo (Gmail), el seguimiento se pausa como en los demás.

@@ -222,6 +222,11 @@ function Settings() {
         <Field label="Correo"><input value={s.bank_email || ''} onChange={set('bank_email')} /></Field>
       </div>
       <Field label="Condiciones comerciales (pie del PDF)"><textarea rows={5} value={s.quote_terms} onChange={set('quote_terms')} /></Field>
+      <h3>Cotizaciones del chatbot: envío automático por correo</h3>
+      <p className="muted small">Al generar una cotización el bot, se envía al correo del cliente con el PDF adjunto. Variables: {'{contacto} {empresa} {numero} {total} {fecha} {vence}'}. Usa el servicio de correo de Integraciones.</p>
+      <label className="check"><input type="checkbox" checked={s.quote_mail_enabled !== '0'} onChange={(e) => { setOk(false); setS({ ...s, quote_mail_enabled: e.target.checked ? '1' : '0' }); }} /> Enviar automáticamente la cotización al correo del cliente</label>
+      <Field label="Asunto"><input value={s.quote_mail_subject || ''} onChange={set('quote_mail_subject')} /></Field>
+      <Field label="Mensaje"><textarea rows={7} value={s.quote_mail_body || ''} onChange={set('quote_mail_body')} /></Field>
       <h3>Alertas de conversaciones por correo</h3>
       <p className="muted small">Si una conversación derivada (o una tarea pendiente del bot) pasa varios minutos sin que un ejecutivo responda, se envía un aviso por correo. Usa el servicio de correo de Integraciones.</p>
       <label className="check"><input type="checkbox" checked={s.alert_enabled !== '0'} onChange={(e) => { setOk(false); setS({ ...s, alert_enabled: e.target.checked ? '1' : '0' }); }} /> Enviar alertas de conversaciones sin atender</label>

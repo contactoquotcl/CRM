@@ -15,7 +15,7 @@ Object.assign(process.env, {
   WC_BASE_URL: fakes.url, WC_CONSUMER_KEY: 'ck', WC_CONSUMER_SECRET: 'cs', WC_WEBHOOK_SECRET: 'wc-hook',
   CHATWOOT_BASE_URL: fakes.url, CHATWOOT_ACCOUNT_ID: '1', CHATWOOT_API_TOKEN: 'cw-token', CHATWOOT_INBOX_ID: '7', CHATWOOT_WEBHOOK_SECRET: 'cw-hook',
   ANTHROPIC_API_KEY: 'test-key', ANTHROPIC_BASE_URL: fakes.url,
-  BOT_RATE_IP_PER_MIN: '1000', BOT_SESSIONS_PER_IP_HOUR: '1000', BOT_RATE_SESSION_PER_MIN: '1000',
+  RESEND_API_URL: fakes.url, BOT_RATE_IP_PER_MIN: '1000', BOT_SESSIONS_PER_IP_HOUR: '1000', BOT_RATE_SESSION_PER_MIN: '1000',
 });
 F.cwAgents = [{ id: 11, email: 'ana@test.cl' }, { id: 12, email: 'beto@test.cl' }];
 
@@ -225,7 +225,7 @@ test('chatbot: datos del cliente (RUT empresa, razón social, contacto, correo, 
   const token = await newSession();
   F.llmQueue = [
     llmTool('derivar_ejecutivo', { motivo: 'cotizacion', resumen: 'quiere 10 ZD421', rut: '77.372.977-8', razon_social: 'Logística Andes SpA', nombre: 'María Pérez', correo: 'maria@andes.cl', telefono: '+56 9 8765 4321' }, 'dc1'),
-    llmText('Listo, un ejecutivo te responderá por este chat.'),
+    llmText('Listo, un ejecutivo se contactará contigo por correo o WhatsApp.'),
   ];
   const r = await say(token, 'quiero cotizar 10 ZD421, soy de Logística Andes');
   assert.equal(r.data.handoff, true);
@@ -337,6 +337,8 @@ test('fase 2 · cotización del bot: motor único, lead en Cotizado, PDF sin cos
     llmTool('generar_cotizacion', { cliente: CLIENTE, items: [{ sku: 'ZD421-203', cantidad: 2 }] }),
     (b) => { const o = lastToolResult(b); return llmText(`Cotización N° ${o.numero_cotizacion}: total $${o.total_con_iva.toLocaleString('es-CL')} con IVA. PDF: ${o.link_pdf}`); },
   ];
+  await api('PUT', '/api/integrations', { token: admin, body: { values: { EMAIL_PROVIDER: 'resend', RESEND_API_KEY: 're_testkey' } } });
+  const mailsBefore = F.mails.length;
   const r = await say(token, `Mis datos: ${CLIENTE.razon_social}, ${CLIENTE.nombre}, ${CLIENTE.correo}, ${CLIENTE.telefono}, RUT ${CLIENTE.rut}. Confirmo 2 ZD421-203`);
   const reply = r.data.replies[0].content;
   assert.match(reply, new RegExp(`N° ${before}:`)); // correlativo del motor existente
@@ -346,6 +348,16 @@ test('fase 2 · cotización del bot: motor único, lead en Cotizado, PDF sin cos
 
   const q = (await query('SELECT q.*, u.name AS creator FROM quotes q JOIN users u ON u.id=q.created_by WHERE q.number=$1', [before])).rows[0];
   assert.deepEqual([q.channel, q.creator, q.validity_days, q.total], ['Chatbot', 'Bot', 30, 928176]);
+  // Copia automática por correo al cliente, con el PDF adjunto y registrada en el historial
+  assert.equal(F.mails.length, mailsBefore + 1);
+  const sent = F.mails[F.mails.length - 1];
+  assert.match(JSON.stringify(sent.to), /maria@andes\.cl/);
+  assert.match(sent.subject, new RegExp(`Tu cotización N° ${before}`));
+  assert.match(JSON.stringify(sent.attachments || []), /Cotizacion-/);
+  const logRow = (await query("SELECT status, trigger FROM followup_emails WHERE quote_id=$1 AND step='quote'", [q.id])).rows;
+  assert.deepEqual(logRow, [{ status: 'enviado', trigger: 'bot' }]);
+  const { sendQuoteEmail } = await import('../src/followup.js');
+  assert.equal((await sendQuoteEmail(q.id)).skipped, true, 'no se reenvía');
   assert.doesNotMatch(q.notes, /plazo|días hábiles|entrega/i); // la entrega es inmediata y no se informa en la cotización
   assert.match(q.notes, /Región Metropolitana/);
   const lead = (await query('SELECT l.channel, s.name AS state, l.quote_number FROM leads l JOIN pipeline_states s ON s.id=l.state_id WHERE l.id=$1', [q.lead_id])).rows[0];
@@ -466,6 +478,8 @@ test('derivación: cliente la pide → round-robin, nota privada, lead "Cotizado
   assert.match(r0.data.replies[0].content, /razón social.*nombre de contacto.*teléfono/s);
   assert.doesNotMatch(r0.data.replies[0].content, /RUT de la empresa/);
   const r = await say(t1, 'sin datos');
+  assert.match(r.data.replies[0].content, /correo o WhatsApp/);
+  assert.doesNotMatch(r.data.replies[0].content, /este (mismo )?chat|inmediat/i);
   assert.equal(r.data.handoff, true);
   assert.equal(r.data.status, 'handoff');
   assert.equal(F.llmRequests.length, 0); // detección en código, sin pasar por el modelo
@@ -513,7 +527,7 @@ test('derivación: cliente la pide → round-robin, nota privada, lead "Cotizado
 
 test('derivación por herramienta, 2 fallos seguidos y frustración', async () => {
   const t = await newSession();
-  F.llmQueue = [llmTool('derivar_ejecutivo', { motivo: 'cotizacion', resumen: 'Quiere 10 ZD421 y etiquetas', nombre: 'Juan Pérez', correo: 'juan@x.cl', telefono: '+56 9 8765 4321', rut: '76.086.428-5', razon_social: 'Empresa X SpA', productos: [{ sku: 'ZD421-203', descripcion: 'Impresora ZD421', cantidad: 10 }] }), llmText('Listo, un ejecutivo te responderá por este chat.')];
+  F.llmQueue = [llmTool('derivar_ejecutivo', { motivo: 'cotizacion', resumen: 'Quiere 10 ZD421 y etiquetas', nombre: 'Juan Pérez', correo: 'juan@x.cl', telefono: '+56 9 8765 4321', rut: '76.086.428-5', razon_social: 'Empresa X SpA', productos: [{ sku: 'ZD421-203', descripcion: 'Impresora ZD421', cantidad: 10 }] }), llmText('Listo, un ejecutivo se contactará contigo por correo o WhatsApp.')];
   const r = await say(t, 'quiero cotizar 10 impresoras ZD421 y etiquetas');
   assert.equal(r.data.handoff, true);
   const c = (await convOf(t)).conversation;

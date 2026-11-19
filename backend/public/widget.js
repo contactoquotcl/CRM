@@ -154,7 +154,7 @@
       var firstLoad = lastId === 0;
       if (firstLoad && j.messages.length) { msgs.innerHTML = ''; }
       render(j.messages);
-      if (status !== j.status) { status = j.status; if (status === 'handoff') bubble('sys', 'Un ejecutivo de Quot te atenderá en este chat.'); }
+      if (status !== j.status) { status = j.status; if (status === 'handoff') bubble('sys', 'Derivamos tu solicitud: un ejecutivo de Quot se contactará contigo por correo o WhatsApp.'); }
       schedule();
     });
   }
