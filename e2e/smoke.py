@@ -53,10 +53,16 @@ try:
 
         site.locator('textarea').fill('mi correo es cliente@empresa.cl, quiero hablar con un ejecutivo')
         site.keyboard.press('Enter')
-        expect(site.locator('.m.bot').last).to_contain_text('sin datos', timeout=15000)  # antes de derivar pide los datos
+        expect(site.locator('.m.bot').last).to_contain_text('necesito que me compartas', timeout=15000)  # antes de derivar pide los datos
         site.locator('textarea').fill('sin datos')
         site.keyboard.press('Enter')
-        expect(site.locator('.m.sys').last).to_contain_text('ejecutivo de Quot te atenderá', timeout=15000)
+        expect(site.locator('.m.bot').last).to_contain_text('contacto@quot.cl', timeout=15000)  # sin datos no se deriva
+        site.locator('textarea').fill('quiero hablar con un ejecutivo')
+        site.keyboard.press('Enter')
+        expect(site.locator('.m.bot').last).to_contain_text('necesito que me compartas', timeout=15000)
+        site.locator('textarea').fill('RUT: 76.086.428-5, razón social: Acme SpA, contacto: Marta Soto, correo: cliente@empresa.cl, teléfono: +56 9 1111 2222')
+        site.keyboard.press('Enter')
+        expect(site.locator('.m.sys').last).to_contain_text('se contactará contigo por correo o WhatsApp', timeout=15000)
         site.screenshot(path=f'{OUT}/2-widget-derivado.png')
 
         # ---- Ejecutivo en el CRM
@@ -67,7 +73,7 @@ try:
         expect(crm.locator('.nav-badge')).to_have_text('1', timeout=15000)               # badge de no leídas
         crm.get_by_role('link', name='Conversaciones').click()
         row = crm.locator('.inbox-row').first
-        expect(row).to_contain_text('cliente@empresa.cl')
+        expect(row).to_contain_text('marta soto')
         row.click()
         expect(crm.locator('.bubble.in').first).to_contain_text('busco etiquetas')
         expect(crm.locator('.bubble.bot').first).to_contain_text('$5.490')
@@ -84,7 +90,7 @@ try:
 
         # ---- Pipeline: el lead nació desde el chat
         crm.get_by_role('link', name='Pipeline').click()
-        expect(crm.locator('.lead-card', has_text='cliente@empresa.cl')).to_be_visible(timeout=10000)
+        expect(crm.locator('.lead-card', has_text='marta soto')).to_be_visible(timeout=10000)
         b.close()
     print('SMOKE OK')
 finally:

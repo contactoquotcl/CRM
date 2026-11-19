@@ -95,3 +95,9 @@ Había 179 leads en «Cotizado» pero solo 20 con cotización registrada en el s
 ## 40. Derivación sin promesa de inmediatez + cotización del bot enviada por correo
 - Todos los textos de derivación (respuestas del motor, herramienta, widget, prompt) dicen que un ejecutivo se contactará **por correo o WhatsApp**, sin prometer respuesta inmediata ni por el mismo chat. Si el ejecutivo responde desde el CRM, el mensaje igual llega al widget.
 - Al generar una cotización el bot, se envía automáticamente al correo registrado con el PDF adjunto (`followup.sendQuoteEmail`), una sola vez por cotización. Queda en Seguimiento → Historial como «Cotización enviada» (origen «Bot»), no cuenta para el límite diario de seguimientos, y si el correo falla el bot igual entrega el enlace. Configurable en Admin (activar, asunto y mensaje). Si el cliente responde ese correo (Gmail), el seguimiento se pausa como en los demás.
+
+## 41. La derivación a un ejecutivo exige los 5 datos del cliente (se elimina «sin datos»)
+- Como el ejecutivo contacta por correo o WhatsApp, solo se deriva si el cliente dejó RUT, razón social, nombre de contacto, correo y teléfono. Aplica a toda derivación salvo posible spam (que no genera lead ni asignación): pedido del cliente, reclamos, frustración, 2 fallos del bot, bot sin IA.
+- Si faltan, el bot los pide (una vez completa y una vez solo los faltantes). Si el cliente se niega («sin datos», «no quiero…») o no los entrega, **no se deriva**: se le indica que sin esos datos no se puede completar la derivación y que puede escribir a contacto@quot.cl. La herramienta `derivar_ejecutivo` rechaza si faltan datos (se retiró `sin_datos`).
+- Una tarea pendiente (datos solicitados) dispara la alerta por correo si el cliente no responde en N min (decisión 38).
+- Contrapartida a vigilar: un cliente molesto que no quiera dar datos queda sin derivar y con el correo de contacto.

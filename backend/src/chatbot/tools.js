@@ -50,7 +50,6 @@ export const TOOLS = [
           description: 'Productos o servicios que el cliente quiere cotizar/comprar (para que el ejecutivo y el pipeline los registren)',
           items: { type: 'object', properties: { sku: { type: 'string' }, descripcion: { type: 'string' }, cantidad: { type: 'integer' } }, required: ['descripcion'] },
         },
-        sin_datos: { type: 'boolean', description: 'true SOLO si ya le pediste los datos al cliente y se negó o no los entregó' },
       },
       required: ['motivo', 'resumen'],
     },
@@ -124,7 +123,6 @@ export function validateArgs(name, input) {
     if (tel && !PHONE.test(tel)) return { ok: false, error: 'El teléfono no es válido: pídeselo de nuevo al cliente (o no lo incluyas)' };
     const rut = str(a.rut, 14);
     if (rut && !validRut(rut)) return { ok: false, error: 'El RUT no es válido (dígito verificador): pídeselo de nuevo al cliente (o no lo incluyas)' };
-    out.sin_datos = a.sin_datos === true;
     out.productos = (Array.isArray(a.productos) ? a.productos.slice(0, 30) : []).map((p) => {
       const o = p && typeof p === 'object' ? p : {};
       const q = Number(o.cantidad);

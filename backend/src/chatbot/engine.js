@@ -12,6 +12,8 @@ import { handoff as doHandoffInbox, mirrorMessage, setConversationStatus, getCon
 
 export const WELCOME = '¡Hola! Soy el asistente virtual de Quot. Puedo ayudarte a encontrar productos (etiquetas, impresoras Zebra, lectores, stretch film y más), revisar precios y stock, o derivarte con un ejecutivo. ¿En qué te ayudo?';
 const HANDOFF_REPLY = 'Listo, derivé tu solicitud a un ejecutivo de Quot. Se pondrá en contacto contigo por correo o WhatsApp con los datos que nos dejaste. Si aún no nos diste tu correo o teléfono, escríbelos aquí para poder contactarte.';
+const CONTACT_MAIL = 'contacto@quot.cl';
+const NO_DATA_REPLY = `Sin esos datos no puedo completar la derivación a un ejecutivo, porque se contactará contigo por correo o WhatsApp. Si prefieres no dejarlos, puedes escribirnos directamente a ${CONTACT_MAIL} y te atenderemos por ahí.`;
 const GUARD_REPLY = 'Para darte un valor exacto prefiero que lo confirme un ejecutivo. ¿Quieres que te derive con uno?';
 const ERROR_REPLY = 'Tuve un problema técnico para responderte. ¿Puedes intentar de nuevo?';
 
@@ -59,7 +61,7 @@ export function frustrated(raw, n) {
   return /\b(pesim\w*|inutil\w*|estafa\w*|reclamo|reclamar|sernac|denuncia\w*|abogado|verguenza|vergonzos\w*|ridicul\w*|basura|harto|harta|me tienen cansad\w*|no me entiendes?|no entiendes|nadie me (responde|contesta|atiende)|no me sirve nada|pesima atencion|mala atencion|pesimo servicio)\b/.test(n);
 }
 
-const PENDING_NOTE = '\n\nESTADO ACTUAL: ya le pediste al cliente sus datos antes de derivarlo. Toma lo que haya entregado en su último mensaje (RUT, razón social, nombre, correo, teléfono) y llama AHORA a derivar_ejecutivo con esos datos (sin_datos=true si no los dio) y con los productos que quiere cotizar en `productos`. No vuelvas a pedirlos.';
+const PENDING_NOTE = '\n\nESTADO ACTUAL: ya le pediste al cliente sus datos para derivarlo. Toma lo que haya entregado (RUT, razón social, nombre, correo, teléfono) y llama a derivar_ejecutivo con todos los datos y con los productos que quiere cotizar en "productos". La derivación SOLO se completa con los 5 datos: si falta alguno, pide únicamente los que faltan; si el cliente no quiere darlos, NO derives: dile que sin esos datos no puedes completar la derivación y que puede escribir a contacto@quot.cl.';
 const PROMISE_RE = /\b(procedere|voy a (generar|armar|crear|preparar|emitir|consultar|verificar|buscar)|un momento|un momentito|dame un momento|permiteme|enseguida|ya te (genero|envio|mando|preparo)|generando)\b/;
 const cleanText = (s, max) => String(s ?? '').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').trim().slice(0, max);
 
@@ -159,16 +161,23 @@ async function saveInterest(session, productos) {
 }
 
 /**
- * Deriva SIEMPRE tras pedir los datos al cliente: si faltan y aún no se pidieron, los pide y deja la derivación pendiente;
- * en el siguiente mensaje se evalúa con lo que el cliente haya entregado (o se deriva igual si no quiso darlos).
+ * La derivación a un ejecutivo exige los 5 datos del cliente (el contacto es por correo o WhatsApp).
+ * Si faltan, los pide (máx. 2 veces); si el cliente no los entrega o se niega, NO se deriva y se le indica escribir a contacto@quot.cl.
  */
+async function refuseHandoff(session, reply = NO_DATA_REPLY) {
+  session.pending_handoff = ''; session.data_asks = 0;
+  await query("UPDATE chat_sessions SET pending_handoff='', data_asks=0 WHERE id=$1", [session.id]);
+  await say(session, reply);
+  return { replies: [{ role: 'assistant', content: reply }], status: 'bot', handoff: false };
+}
 async function askDataThenHandoff(session, motivo, resumen, intro) {
   const falta = missingData(session);
-  if (!falta.length || session.data_asks >= 1 || !llmEnabled()) return handoffTurn(session, motivo, resumen);
+  if (!falta.length) return handoffTurn(session, motivo, resumen);
+  if (session.data_asks >= 2 || !llmEnabled()) return refuseHandoff(session);
   session.data_asks += 1;
   session.pending_handoff = `${motivo}|${resumen}`.slice(0, 500);
   await query('UPDATE chat_sessions SET data_asks=data_asks+1, pending_handoff=$2, pending_at=now(), pending_alerted_at=NULL WHERE id=$1', [session.id, session.pending_handoff]);
-  const reply = `${intro} Para que te atienda mejor, ¿me compartes en un solo mensaje: ${falta.join(', ')}? Si prefieres no darlos, escribe "sin datos" y te derivo igual.`;
+  const reply = `${intro} Para que un ejecutivo se contacte contigo por correo o WhatsApp, necesito que me compartas en un solo mensaje: ${falta.join(', ')}.`;
   await say(session, reply);
   return { replies: [{ role: 'assistant', content: reply }], status: 'bot', handoff: false };
 }
@@ -202,17 +211,13 @@ export async function handleUserMessage(session, rawText) {
   const n = norm(text);
   const pending = session.pending_handoff || '';
   if (!pending && wantsHuman(n)) return askDataThenHandoff(session, 'cliente_solicita', 'El cliente pidió hablar con un ejecutivo.', 'Con gusto te conecto con un ejecutivo de Quot.');
-  if (pending && /\b(sin datos|no quiero|prefiero no|no te los|omitir|despues)\b/.test(n) && n.length < 80) {
-    const [mot, ...res] = pending.split('|');
-    await query("UPDATE chat_sessions SET pending_handoff='' WHERE id=$1", [session.id]);
-    return handoffTurn(session, mot || 'otro', res.join('|') || 'Derivado a ejecutivo.');
-  }
+  if (pending && /\b(sin datos|no quiero|prefiero no|no te los|no los voy|omitir|despues)\b/.test(n) && n.length < 80) return refuseHandoff(session);
   if (await spamEnabled()) {
     const why = await detectSpam(session, text);
     if (why) return handoffTurn(session, 'posible_spam', `Posible spam: ${why}. Revisa y, si es spam, resuelve la conversación.`, 'Recibí tu mensaje. Lo derivé a un ejecutivo de Quot, que se contactará contigo por correo o WhatsApp si corresponde.', true);
   }
-  if (frustrated(text, n)) return handoffTurn(session, 'frustracion', 'Se detectó frustración o molestia en el mensaje del cliente.', 'Lamento la molestia. Derivé tu caso a un ejecutivo de Quot, que se contactará contigo por correo o WhatsApp para atenderte personalmente.');
-  if (!llmEnabled()) return handoffTurn(session, 'otro', 'El asistente de IA no está configurado; atención directa.', 'Ahora mismo no puedo responder automáticamente, pero ya avisé a un ejecutivo de Quot, que se contactará contigo por correo o WhatsApp. Déjame aquí tu correo o teléfono y lo que necesitas.');
+  if (!pending && frustrated(text, n)) return askDataThenHandoff(session, 'frustracion', 'Se detectó frustración o molestia en el mensaje del cliente.', 'Lamento la molestia, quiero que te atienda una persona.');
+  if (!llmEnabled()) return askDataThenHandoff(session, 'otro', 'El asistente de IA no está configurado; atención directa.', 'Ahora mismo no puedo responder automáticamente.');
 
   // Historial reciente → mensajes alternados user/assistant
   const hist = (await query("SELECT role, content FROM chat_messages WHERE session_id=$1 AND role IN ('user','assistant') ORDER BY id DESC LIMIT 30", [session.id])).rows.reverse();
@@ -236,12 +241,16 @@ export async function handleUserMessage(session, rawText) {
     handoff: async (args) => {
       await saveContact(session, { customer_company: args.razon_social, customer_name: args.nombre, customer_email: args.correo, customer_phone: args.telefono, customer_rut: args.rut });
       await saveInterest(session, args.productos);
-      // Antes de derivar siempre se piden los datos (una sola vez): si faltan y aún no se pidieron, la herramienta lo rechaza.
+      // La derivación exige los 5 datos del cliente (el contacto es por correo o WhatsApp).
       const falta = missingData(session);
-      if (falta.length && !args.sin_datos && session.data_asks < 1) {
-        session.data_asks += 1;
-        await query('UPDATE chat_sessions SET data_asks=data_asks+1 WHERE id=$1', [session.id]);
-        return { ok: false, error: `Antes de derivar pídele al cliente, en UN solo mensaje, estos datos que faltan: ${falta.join(', ')}. Cuando responda (o si no quiere darlos) vuelve a llamar derivar_ejecutivo (con sin_datos=true si se negó).` };
+      if (falta.length) {
+        if (!session.pending_handoff) {
+          // Queda como tarea pendiente (se vuelve a pedir y, si no hay datos, se rechaza)
+          session.data_asks += 1;
+          session.pending_handoff = `${args.motivo}|${args.resumen}`.slice(0, 500);
+          await query('UPDATE chat_sessions SET data_asks=data_asks+1, pending_handoff=$2, pending_at=now(), pending_alerted_at=NULL WHERE id=$1', [session.id, session.pending_handoff]);
+        }
+        return { ok: false, error: `No se puede derivar: faltan estos datos del cliente: ${falta.join(', ')}. Pídele SOLO los que faltan, en un solo mensaje. Si el cliente no quiere darlos, NO derives: dile que sin esos datos no puedes completar la derivación y que puede escribir a ${CONTACT_MAIL}.` };
       }
       const r = await performHandoff(session, { motivo: args.motivo, resumen: args.resumen });
       handedOff = true;
@@ -297,12 +306,20 @@ export async function handleUserMessage(session, rawText) {
   }
 
   if (pending && !handedOff) {
-    // Los datos ya se pidieron: se deriva igual con lo que haya, aunque el modelo no haya llamado a la herramienta.
-    const [mot, ...res] = pending.split('|');
-    await performHandoff(session, { motivo: mot || 'otro', resumen: res.join('|') || 'Derivado a ejecutivo.' });
-    handedOff = true;
-    failed = false;
-    reply = HANDOFF_REPLY;
+    // Los datos ya se pidieron: si ahora están completos se deriva; si no, se vuelve a pedir una vez y luego se rechaza la derivación.
+    if (!missingData(session).length) {
+      const [mot, ...res] = pending.split('|');
+      await performHandoff(session, { motivo: mot || 'otro', resumen: res.join('|') || 'Derivado a ejecutivo.' });
+      handedOff = true;
+      failed = false;
+      reply = HANDOFF_REPLY;
+    } else if (session.data_asks >= 2) {
+      return refuseHandoff(session);
+    } else {
+      session.data_asks += 1;
+      await query('UPDATE chat_sessions SET data_asks=data_asks+1 WHERE id=$1', [session.id]);
+      reply = `Para que un ejecutivo se contacte contigo necesito que me compartas: ${missingData(session).join(', ')}.`;
+    }
   }
   if (handedOff && pending) await query("UPDATE chat_sessions SET pending_handoff='' WHERE id=$1", [session.id]);
   if (!reply) reply = handedOff ? HANDOFF_REPLY : ERROR_REPLY;
