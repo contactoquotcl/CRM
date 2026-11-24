@@ -71,13 +71,14 @@ async function groups() {
     }
     clusters.push(cur);
   }
-  const allQ = (await query('SELECT id, number, lead_id, quote_date::text AS quote_date, total, validity_days, channel FROM quotes WHERE lead_id = ANY($1::int[]) ORDER BY quote_date, number', [rows.map((r) => r.lead_id)])).rows;
+  const allQ = (await query('SELECT id, number, lead_id, quote_date::text AS quote_date, total, validity_days, channel, (CASE WHEN channel = \'Chatbot\' THEN \'Chatbot\' ELSE (SELECT u.name FROM users u WHERE u.id = quotes.created_by) END) AS creator FROM quotes WHERE lead_id = ANY($1::int[]) ORDER BY quote_date, number', [rows.map((r) => r.lead_id)])).rows;
+  const leadOwners = Object.fromEntries((await query('SELECT l.id, u.name FROM leads l JOIN users u ON u.id = l.created_by WHERE l.id = ANY($1::int[])', [rows.map((r) => r.lead_id)])).rows.map((r) => [r.id, r.name]));
   return clusters.map((members) => {
     const primary = [...members].sort((x, y) => String(y.quote_date).localeCompare(String(x.quote_date)) || Number(y.number) - Number(x.number))[0];
     const latest = primary.quote_date;
     const ids = new Set(members.map((m) => m.lead_id));
-    const quotes = allQ.filter((q) => ids.has(q.lead_id) && (!latest || dayGap(q.quote_date, latest) <= days)).map((q) => ({ quote_id: q.id, number: q.number, lead_id: q.lead_id, date: q.quote_date, total: q.total, validity_days: q.validity_days }));
-    for (const m of members) if (!quotes.some((q) => q.lead_id === m.lead_id)) quotes.push({ quote_id: null, number: m.lead_quote_number ?? m.number, lead_id: m.lead_id, date: m.quote_date, total: Number(m.total) || 0, validity_days: m.validity_days });
+    const quotes = allQ.filter((q) => ids.has(q.lead_id) && (!latest || dayGap(q.quote_date, latest) <= days)).map((q) => ({ quote_id: q.id, number: q.number, lead_id: q.lead_id, date: q.quote_date, total: q.total, validity_days: q.validity_days, creator: q.creator || leadOwners[q.lead_id] || '' }));
+    for (const m of members) if (!quotes.some((q) => q.lead_id === m.lead_id)) quotes.push({ quote_id: null, number: m.lead_quote_number ?? m.number, lead_id: m.lead_id, date: m.quote_date, total: Number(m.total) || 0, validity_days: m.validity_days, creator: m.channel === 'Chatbot' ? 'Chatbot' : leadOwners[m.lead_id] || '' });
     quotes.sort((x, y) => String(x.date).localeCompare(String(y.date)) || Number(x.number) - Number(y.number));
     const nums = quotes.map((q) => q.number).filter((n) => n !== null && n !== undefined);
     const mode = members.some((m) => m.follow_mode === 'pausado') ? 'pausado' : primary.follow_mode;
@@ -86,6 +87,7 @@ async function groups() {
       ...primary, lead_ids: members.map((m) => m.lead_id), quotes, quote_count: quotes.length, number: joinNums(nums), numbers: nums,
       total: quotes.reduce((a, q) => a + (Number(q.total) || 0), 0), quote_id: quotes.find((q) => q.quote_id)?.quote_id || null,
       email: validEmail(primary.email) ? primary.email : members.map((m) => m.email).find(validEmail) || primary.email,
+      created_by_names: [...new Set(quotes.map((q) => q.creator).filter(Boolean))],
       follow_mode: mode, follow_sched_at: sched?.follow_sched_at || null, follow_sched_step: sched?.follow_sched_step || '',
       state_date: members.map((m) => m.state_date).filter(Boolean).sort().pop() || primary.state_date,
       sent_count: Math.max(...members.map((m) => m.sent_count)),

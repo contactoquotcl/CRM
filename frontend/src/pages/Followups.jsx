@@ -127,7 +127,7 @@ export default function Followups() {
             <table>
               <thead><tr>
                 <th><input type="checkbox" checked={allSel} onChange={() => setSel(allSel ? new Set() : new Set(rows.map((r) => r.lead_id)))} aria-label="Seleccionar todas" /></th>
-                <th>N°</th><th>Cliente</th><th>Contacto / correo</th><th className="num">Total c/IVA</th><th>En etapa</th><th>Toca / programado</th><th>Modo</th><th>Último correo</th>
+                <th>N°</th><th>Cliente</th><th>Creada por</th><th>Contacto / correo</th><th className="num">Total c/IVA</th><th>En etapa</th><th>Toca / programado</th><th>Modo</th><th>Último correo</th>
               </tr></thead>
               <tbody>
                 {rows.map((r) => (
@@ -135,6 +135,7 @@ export default function Followups() {
                     <td><input type="checkbox" checked={sel.has(r.lead_id)} onChange={() => toggle(r.lead_id)} aria-label={`Seleccionar ${r.number}`} /></td>
                     <td><strong>{r.number}</strong><div className="muted small">{r.quote_date ? fmtDate(r.quote_date) : ''}</div>{r.quote_count > 1 && <Badge color="#0ea5e9">{r.quote_count} cotizaciones del cliente</Badge>}{!r.has_pdf && <Badge color="#64748b">sin PDF</Badge>}</td>
                     <td>{r.razon_social}</td>
+                    <td>{r.created_by_names?.length ? r.created_by_names.join(', ') : <span className="muted">—</span>}</td>
                     <td>{r.contact}<div className="muted small">{r.email || '—'}</div>{r.problems.map((p) => <Badge key={p} color="#dc2626">{p}</Badge>)}</td>
                     <td className="num">{r.total > 0 ? clp(r.total) : '—'}{r.quote_count > 1 && <div className="muted small">suma de {r.quote_count}</div>}</td>
                     <td>{r.days_in_state} d</td>

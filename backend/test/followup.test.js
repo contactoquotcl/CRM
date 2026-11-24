@@ -328,3 +328,13 @@ test('programación y modo se aplican a todo el conjunto del cliente', async () 
   assert.equal((await query('SELECT follow_sched_at FROM leads WHERE id=$1', [ids[0]])).rows[0].follow_sched_at, null);
   void b;
 });
+
+test('el seguimiento muestra quién creó la cotización (usuario o Chatbot)', async () => {
+  const bot = await mkQuote('quien@bot.cl', 'Chatbot');
+  const u = (await query("SELECT id, name FROM users LIMIT 1")).rows[0];
+  const hum = await mkQuote('quien@humano.cl', 'Cotizador');
+  await query('UPDATE quotes SET created_by=$1 WHERE id=$2', [u.id, hum.id]);
+  const rows = (await api('GET', '/api/followups')).data.rows;
+  assert.deepEqual(rows.find((r) => r.lead_ids.includes(bot.lead_id)).created_by_names, ['Chatbot']);
+  assert.deepEqual(rows.find((r) => r.lead_ids.includes(hum.lead_id)).created_by_names, [u.name]);
+});
