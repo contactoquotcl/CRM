@@ -233,6 +233,7 @@ function Settings() {
       <div className="grid2">
         <Field label="Correo que recibe las alertas"><input type="email" value={s.alert_email || ''} onChange={set('alert_email')} /></Field>
         <Field label="Minutos de espera antes de alertar" hint="Recomendado: 2 a 3."><input value={s.alert_minutes || ''} onChange={set('alert_minutes')} inputMode="numeric" /></Field>
+        <Field label="Ventana de conversión (días)" hint="Una factura se asocia a una cotización del mismo RUT hecha hasta estos días antes. Por defecto 120."><input value={s.conversion_window_days || ''} onChange={set('conversion_window_days')} inputMode="numeric" /></Field>
       </div>
       <h3>Seguimiento de cotizaciones por correo</h3>
       <p className="muted small">Variables disponibles: {'{contacto} {empresa} {numero} {total} {fecha} {vence}'}. Al final de cada correo se agrega automáticamente la línea para dejar de recibir seguimientos. El servicio de correo se configura en Integraciones.</p>

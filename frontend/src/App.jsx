@@ -8,6 +8,7 @@ import Products from './pages/Products.jsx';
 import Quoter from './pages/Quoter.jsx';
 import Quotes from './pages/Quotes.jsx';
 import Followups from './pages/Followups.jsx';
+import Conversion from './pages/Conversion.jsx';
 import Import from './pages/Import.jsx';
 import Admin from './pages/Admin.jsx';
 import Conversations from './pages/Conversations.jsx';
@@ -90,6 +91,7 @@ function Shell() {
           <NavLink to="/cotizaciones">Cotizaciones</NavLink>
           <NavLink to="/seguimiento">Seguimiento</NavLink>
           <NavLink to="/productos">Productos</NavLink>
+          {isAdmin && <NavLink to="/conversion">Conversión</NavLink>}
           {isAdmin && <NavLink to="/importar">Importar</NavLink>}
           {isAdmin && <NavLink to="/admin">Admin</NavLink>}
         </nav>
@@ -106,6 +108,7 @@ function Shell() {
           <Route path="/cotizaciones" element={<Quotes />} />
           <Route path="/seguimiento" element={<Followups />} />
           <Route path="/productos" element={<Products />} />
+          <Route path="/conversion" element={isAdmin ? <Conversion /> : <Navigate to="/" />} />
           <Route path="/importar" element={isAdmin ? <Import /> : <Navigate to="/" />} />
           <Route path="/admin" element={isAdmin ? <Admin /> : <Navigate to="/" />} />
           <Route path="*" element={<Navigate to="/" />} />

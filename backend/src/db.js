@@ -87,6 +87,27 @@ CREATE TABLE IF NOT EXISTS quotes (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS invoices (
+  id SERIAL PRIMARY KEY,
+  tipo INTEGER NOT NULL,
+  folio TEXT NOT NULL,
+  fecha DATE NOT NULL,
+  rut TEXT NOT NULL DEFAULT '',
+  razon TEXT NOT NULL DEFAULT '',
+  neto INTEGER NOT NULL DEFAULT 0,
+  exento INTEGER NOT NULL DEFAULT 0,
+  iva INTEGER NOT NULL DEFAULT 0,
+  total INTEGER NOT NULL DEFAULT 0,
+  quote_id INTEGER REFERENCES quotes(id) ON DELETE SET NULL,
+  match TEXT NOT NULL DEFAULT '',
+  source TEXT NOT NULL DEFAULT '',
+  uploaded_by INTEGER,
+  uploaded_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (tipo, folio)
+);
+CREATE INDEX IF NOT EXISTS invoices_fecha_idx ON invoices(fecha);
+CREATE INDEX IF NOT EXISTS invoices_rut_idx ON invoices(rut);
+
 CREATE TABLE IF NOT EXISTS quote_items (
   id SERIAL PRIMARY KEY,
   quote_id INTEGER NOT NULL REFERENCES quotes(id) ON DELETE CASCADE,
@@ -129,6 +150,7 @@ const DEFAULT_SETTINGS = {
   quote_mail_enabled: '1',
   quote_mail_subject: 'Tu cotización N° {numero} – Quot.cl',
   quote_mail_body: 'Hola {contacto},\n\nGracias por cotizar con Quot. Adjuntamos tu cotización N° {numero} por {total} IVA incluido, válida hasta el {vence}.\n\nEl PDF incluye los datos para pagar por transferencia. Si necesitas ajustar cantidades o tienes dudas, responde este correo y un ejecutivo te ayudará.\n\nSaludos cordiales,\nEquipo Quot.cl\ncontacto@quot.cl',
+  conversion_window_days: '120',
   alert_enabled: '1',
   alert_email: 'contacto@quot.cl',
   alert_minutes: '3',
