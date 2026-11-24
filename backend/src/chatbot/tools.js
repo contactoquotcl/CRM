@@ -1,6 +1,6 @@
 import { query } from '../db.js';
 import { searchCatalog, priceInfo, wcToRow } from '../catalog.js';
-import { wcEnabled, wcGetProduct, wcFindBySku, wcVariations } from '../woo.js';
+import { wcEnabled, wcGetProduct, wcFindBySku, wcVariations, wcOrderStatus } from '../woo.js';
 import { formatRut, validRut } from '../util.js';
 import { armarCarrito, generarCotizacion } from './commerce.js';
 
@@ -52,6 +52,18 @@ export const TOOLS = [
         },
       },
       required: ['motivo', 'resumen'],
+    },
+  },
+  {
+    name: 'consultar_pedido',
+    description: 'Consulta el estado de un pedido ya hecho en la tienda online (quot.cl). Requiere el número de pedido y el correo con el que se compró: sin ambos no se puede consultar. Devuelve estado, fecha, productos, envío y seguimiento si existe.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        numero: { type: 'string', description: 'Número del pedido (ej: 1234)' },
+        correo: { type: 'string', description: 'Correo de facturación con el que se hizo el pedido' },
+      },
+      required: ['numero', 'correo'],
     },
   },
   {
@@ -112,6 +124,13 @@ export function validateArgs(name, input) {
     const sku = str(a.sku, 80);
     if ((id === undefined || Number.isNaN(id) || id <= 0) && !sku) return { ok: false, error: 'Indica id (entero) o sku' };
     return { ok: true, args: { id: id > 0 ? id : undefined, sku: sku || undefined } };
+  }
+  if (name === 'consultar_pedido') {
+    const numero = str(a.numero, 20).replace(/^#/, '').replace(/\D/g, '');
+    const correo = str(a.correo, 254);
+    if (!numero) return { ok: false, error: 'Falta el número de pedido: pídeselo al cliente (está en el correo de confirmación de la compra)' };
+    if (!EMAIL.test(correo)) return { ok: false, error: 'Falta un correo válido: pide el correo con el que se hizo el pedido' };
+    return { ok: true, args: { numero, correo } };
   }
   if (name === 'derivar_ejecutivo') {
     if (!MOTIVOS.includes(a.motivo)) return { ok: false, error: `motivo debe ser uno de: ${MOTIVOS.join(', ')}` };
@@ -217,6 +236,21 @@ export async function runTool(name, args, ctx) {
     let variants = [];
     if (p.type === 'variable') variants = await wcVariations(p.id).catch(() => []);
     return { ok: true, ...productCard(p, variants) };
+  }
+  if (name === 'consultar_pedido') {
+    if (!wcEnabled()) return { ok: false, error: 'No puedo consultar pedidos en este momento. Ofrece derivar a un ejecutivo.' };
+    const sess = ctx.session;
+    if ((sess.order_fails || 0) >= 5) return { ok: false, error: 'Se superó el máximo de intentos de consulta de pedidos en esta conversación. No sigas consultando: ofrece derivar a un ejecutivo.' };
+    let r = null;
+    try { r = await wcOrderStatus(args.numero, args.correo); } catch (e) {
+      return { ok: false, error: 'La tienda no respondió al consultar el pedido. No inventes el estado; ofrece derivar a un ejecutivo.', detalle: e.message.slice(0, 120) };
+    }
+    if (!r) {
+      sess.order_fails = (sess.order_fails || 0) + 1;
+      await query('UPDATE chat_sessions SET order_fails=order_fails+1 WHERE id=$1', [sess.id]);
+      return { ok: false, error: 'No encontré un pedido con ese número y correo. Pide al cliente que revise ambos datos (el correo debe ser el de la compra). Si no coinciden, ofrece derivar a un ejecutivo.' };
+    }
+    return { ok: true, ...r, nota: 'Informa solo estos datos. No inventes plazos de entrega ni fechas.' };
   }
   if (name === 'armar_carrito') return armarCarrito(args, ctx);
   if (name === 'generar_cotizacion') return generarCotizacion(args, ctx);

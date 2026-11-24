@@ -145,7 +145,7 @@ test('chatbot: sesión firmada, tool use, precio EN VIVO y espejo en bandeja y C
   const req3 = JSON.stringify(F.llmRequests[2].messages);
   assert.match(req3, /precio_neto\\":5990/); // precio vivo, no 5490
   assert.doesNotMatch(req3, /5490/);
-  assert.equal(F.llmRequests[0].tools.length, 5);
+  assert.equal(F.llmRequests[0].tools.length, 6);
   assert.match(F.llmRequests[0].system, /Asistente Quot/);
   assert.equal((await query("SELECT COUNT(*)::int AS n FROM chat_tool_calls WHERE name IN ('buscar_productos','ver_producto')")).rows[0].n, 2);
 
@@ -813,4 +813,48 @@ test('derivar: pide los 5 datos, registra el lead con los productos y el panel l
   const d = await say(t3, 'mi impresora no imprime bien');
   assert.equal(d.data.handoff, false);
   assert.match(d.data.replies[0].content, /contacto@quot\.cl/);
+});
+
+test('consultar_pedido: estado del pedido solo con número + correo coincidente; no expone datos personales; tope de intentos', async () => {
+  F.wooOrders = [{
+    id: 1234, number: '1234', status: 'processing', total: '149990', currency: 'CLP', date_created: '2026-11-20T10:00:00', date_modified: '2026-11-21T09:00:00',
+    billing: { email: 'Compras@Andes.cl', phone: '+56911112222', address_1: 'Calle Secreta 123' }, shipping: { address_1: 'Otra Calle 9' },
+    payment_method_title: 'Webpay', shipping_lines: [{ method_title: 'Starken' }],
+    line_items: [{ quantity: 2, name: 'Etiqueta 100x150' }],
+    meta_data: [{ key: '_wc_shipment_tracking_items', value: [{ tracking_provider: 'Starken', tracking_number: 'ST-998877' }] }, { key: '_secret', value: 'x' }],
+  }];
+  F.wooNotes = { 1234: [{ customer_note: true, date_created: '2026-11-21T08:00:00', note: '<p>Tu pedido salió a despacho.</p>' }, { customer_note: false, note: 'nota interna' }] };
+  const last = async (tok) => JSON.parse((await query('SELECT result FROM chat_tool_calls WHERE session_id=$1 AND name=$2 ORDER BY id DESC LIMIT 1', [sidOf(tok), 'consultar_pedido'])).rows[0].result);
+
+  const t = await newSession();
+  F.llmQueue = [llmTool('consultar_pedido', { numero: '#1234', correo: 'compras@andes.cl' }), llmText('Tu pedido está en preparación.')];
+  await say(t, 'quiero saber el estado de mi pedido 1234, compras@andes.cl');
+  const ok = await last(t);
+  assert.equal(ok.ok, true);
+  assert.deepEqual([ok.numero, ok.estado_codigo, ok.total, ok.envio], ['1234', 'processing', 149990, 'Starken']);
+  assert.deepEqual(ok.seguimiento, [{ empresa: 'Starken', numero: 'ST-998877' }]);
+  assert.deepEqual(ok.notas_para_el_cliente.map((n) => n.texto), ['Tu pedido salió a despacho.']);
+  const raw = JSON.stringify(ok);
+  assert.doesNotMatch(raw, /Secreta|Otra Calle|56911112222|_secret|nota interna/, 'no expone datos personales ni notas internas');
+
+  // correo que no coincide: no se entrega nada y no se revela si el pedido existe
+  const t2 = await newSession();
+  F.llmQueue = [llmTool('consultar_pedido', { numero: '1234', correo: 'otro@persona.cl' }), llmText('No lo encontré.')];
+  await say(t2, 'pedido 1234 otro@persona.cl');
+  const bad = await last(t2);
+  assert.equal(bad.ok, false);
+  assert.doesNotMatch(JSON.stringify(bad), /processing|Starken|149990/);
+  // faltan datos
+  F.llmQueue = [llmTool('consultar_pedido', { numero: '1234', correo: 'no-es-correo' }), llmText('Necesito tu correo.')];
+  await say(t2, 'pedido 1234');
+  assert.equal((await last(t2)).ok, false);
+  // tope de intentos fallidos por conversación: tras 5 fallos se bloquea aunque los datos sean correctos
+  const t3 = await newSession();
+  for (let i = 0; i < 2; i++) { F.llmQueue = [llmTool('consultar_pedido', { numero: String(5000 + i), correo: 'otro@persona.cl' }), llmText('No lo encontré.')]; await say(t3, `pedido ${5000 + i}`); }
+  assert.equal((await query('SELECT order_fails FROM chat_sessions WHERE id=$1', [sidOf(t3)])).rows[0].order_fails, 2);
+  await query('UPDATE chat_sessions SET order_fails=5 WHERE id=$1', [sidOf(t3)]);
+  F.llmQueue = [llmTool('consultar_pedido', { numero: '1234', correo: 'compras@andes.cl' }), llmText('Derivo.')];
+  await say(t3, 'pedido 1234 compras@andes.cl');
+  assert.match((await last(t3)).error, /máximo de intentos/);
+  F.wooOrders = []; F.wooNotes = {};
 });

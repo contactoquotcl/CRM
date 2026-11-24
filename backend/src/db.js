@@ -350,6 +350,7 @@ export async function initDb() {
     ALTER TABLE conversations ADD COLUMN IF NOT EXISTS handoff_at TIMESTAMPTZ;
     ALTER TABLE conversations ADD COLUMN IF NOT EXISTS alerted_at TIMESTAMPTZ;
     ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS pending_at TIMESTAMPTZ;
+    ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS order_fails INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS pending_alerted_at TIMESTAMPTZ;
     ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS pending_handoff TEXT NOT NULL DEFAULT '';
     ALTER TABLE quotes ADD COLUMN IF NOT EXISTS follow_mode TEXT NOT NULL DEFAULT 'manual';

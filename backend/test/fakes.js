@@ -40,6 +40,8 @@ export async function startFakes({ pageSize = 5 } = {}) {
       const live = (pr) => ({ ...pr, ...(state.wooLive[pr.id] || {}) });
       const rest = p.slice('/wp-json/wc/v3'.length);
       let m;
+      if ((m = rest.match(/^\/orders\/(\d+)\/notes$/))) return json(res, 200, (state.wooNotes || {})[m[1]] || []);
+      if ((m = rest.match(/^\/orders\/(\d+)$/))) { const o = (state.wooOrders || []).find((x) => String(x.id) === m[1]); return o ? json(res, 200, o) : json(res, 404, { code: 'woocommerce_rest_shop_order_invalid_id' }); }
       if (rest.startsWith('/orders')) return json(res, 200, state.wooOrders || []);
       if (rest === '/products') {
         const sku = url.searchParams.get('sku');
