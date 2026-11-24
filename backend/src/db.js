@@ -151,6 +151,7 @@ const DEFAULT_SETTINGS = {
   quote_mail_subject: 'Tu cotización N° {numero} – Quot.cl',
   quote_mail_body: 'Hola {contacto},\n\nGracias por cotizar con Quot. Adjuntamos tu cotización N° {numero} por {total} IVA incluido, válida hasta el {vence}.\n\nEl PDF incluye los datos para pagar por transferencia. Si necesitas ajustar cantidades o tienes dudas, responde este correo y un ejecutivo te ayudará.\n\nSaludos cordiales,\nEquipo Quot.cl\ncontacto@quot.cl',
   conversion_window_days: '120',
+  followup_group_days: '30',
   alert_enabled: '1',
   alert_email: 'contacto@quot.cl',
   alert_minutes: '3',
@@ -394,6 +395,9 @@ export async function initDb() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
     ALTER TABLE followup_emails ADD COLUMN IF NOT EXISTS thread_id TEXT NOT NULL DEFAULT '';
+    ALTER TABLE followup_emails ADD COLUMN IF NOT EXISTS batch TEXT NOT NULL DEFAULT '';
+    ALTER TABLE leads ADD COLUMN IF NOT EXISTS state_changed_at TIMESTAMPTZ;
+    UPDATE leads SET state_changed_at = COALESCE(state_date::timestamptz, now()) WHERE state_changed_at IS NULL;
     ALTER TABLE followup_emails ALTER COLUMN quote_id DROP NOT NULL;
     ALTER TABLE followup_emails ADD COLUMN IF NOT EXISTS quote_number TEXT NOT NULL DEFAULT '';
     ALTER TABLE leads ADD COLUMN IF NOT EXISTS follow_mode TEXT NOT NULL DEFAULT 'manual';

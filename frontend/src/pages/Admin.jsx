@@ -241,6 +241,7 @@ function Settings() {
         <Field label="Días en «Cotizado» antes del Seguimiento 1" hint="Solo para los envíos automáticos."><input value={s.followup_days_s1} onChange={set('followup_days_s1')} inputMode="numeric" /></Field>
         <Field label="Días en «Seguimiento 1» antes del Seguimiento 2"><input value={s.followup_days_s2} onChange={set('followup_days_s2')} inputMode="numeric" /></Field>
         <Field label="Días en «Seguimiento 2» antes de archivar"><input value={s.followup_days_close} onChange={set('followup_days_close')} inputMode="numeric" /></Field>
+        <Field label="Agrupar cotizaciones del mismo cliente (días)" hint="Cotizaciones del mismo cliente en la misma etapa y con menos de estos días entre sí se siguen juntas: un solo correo y un solo movimiento. 0 = no agrupar."><input value={s.followup_group_days ?? ''} onChange={set('followup_group_days')} inputMode="numeric" /></Field>
         <Field label="Máximo de correos por día" hint="0 = sin límite. Protege la reputación del dominio."><input value={s.followup_daily_limit} onChange={set('followup_daily_limit')} inputMode="numeric" /></Field>
       </div>
       <label className="check"><input type="checkbox" checked={s.followup_business_hours !== '0'} onChange={(e) => { setOk(false); setS({ ...s, followup_business_hours: e.target.checked ? '1' : '0' }); }} /> Enviar los automáticos solo en horario hábil (lun–vie, 9:00–18:00 hora de Chile)</label>

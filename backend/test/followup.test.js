@@ -23,8 +23,10 @@ const api = async (method, path, { token = admin, body } = {}) => {
   return { status: r.status, data: await r.json().catch(() => null) };
 };
 const stateOf = async (leadId) => (await query('SELECT s.name FROM leads l JOIN pipeline_states s ON s.id=l.state_id WHERE l.id=$1', [leadId])).rows[0].name;
-const mkQuote = async (email, channel = 'Chatbot') => {
-  const q = await createQuote({ client: { rut: '76086428-5', razon_social: 'Acme SpA', email, contact: 'Marta Soto', phone: '+56911112222' }, margin: 25, items: [{ sku: 'X1', description: 'Etiqueta', qty: 2, cost: 1000 }] }, { channel });
+let rutSeq = 0;
+const validRut = (n) => { let sum = 0, m = 2; for (const d of String(n).split('').reverse()) { sum += Number(d) * m; m = m === 7 ? 2 : m + 1; } const r = 11 - (sum % 11); return `${n}-${r === 11 ? '0' : r === 10 ? 'K' : r}`; };
+const mkQuote = async (email, channel = 'Chatbot', rut = validRut(70000000 + ++rutSeq)) => {
+  const q = await createQuote({ client: { rut, razon_social: 'Acme SpA', email, contact: 'Marta Soto', phone: '+56911112222' }, margin: 25, items: [{ sku: 'X1', description: 'Etiqueta', qty: 2, cost: 1000 }] }, { channel });
   return q;
 };
 
@@ -99,14 +101,20 @@ test('error del proveedor: no mueve la etapa y queda registrado; no se repite un
   fakes.state.mailFail = false;
   r = (await api('POST', '/api/followups/send', { body: { lead_ids: [q.lead_id] } })).data;
   assert.equal(r.sent, 1);
-  // Si alguien devuelve el lead a Cotizado, no se reenvía el mismo seguimiento
+  // Mientras siga en la misma etapa del pipeline no se repite el paso enviado (p. ej. un envío atrasado que llega dos veces)
   const cot = (await query("SELECT id FROM pipeline_states WHERE name='Cotizado'")).rows[0].id;
-  await query('UPDATE leads SET state_id=$1 WHERE id=$2', [cot, q.lead_id]);
+  await query("UPDATE leads SET state_id=$1, state_changed_at=now() - interval '1 hour' WHERE id=$2", [cot, q.lead_id]);
   r = (await api('POST', '/api/followups/send', { body: { lead_ids: [q.lead_id] } })).data;
   assert.equal(r.sent, 0);
   assert.match(r.results[0].message, /ya se envió/);
+  // Si alguien lo devuelve a Cotizado en el pipeline, el pipeline manda: el ciclo parte de nuevo
+  const s1 = (await query("SELECT id FROM pipeline_states WHERE name='Seguimiento 1'")).rows[0].id;
+  await api('PUT', `/api/leads/${q.lead_id}/move`, { body: { state_id: s1 } });
+  await api('PUT', `/api/leads/${q.lead_id}/move`, { body: { state_id: cot } });
+  r = (await api('POST', '/api/followups/send', { body: { lead_ids: [q.lead_id] } })).data;
+  assert.equal(r.sent, 1);
   const log = (await api('GET', `/api/followups/log?lead_id=${q.lead_id}`)).data;
-  assert.deepEqual(log.map((x) => x.status).reverse(), ['error', 'enviado']);
+  assert.deepEqual(log.map((x) => x.status).reverse(), ['error', 'enviado', 'enviado']);
 });
 
 test('sin correo válido o pausada: no se envía; modo automático envía lo que ya toca', async () => {
@@ -182,7 +190,7 @@ test('leads antiguos con N° de cotización (sin registro) entran al seguimiento
   const deriv = await mk('Derivación SpA', null, 'der@iv.cl');
   const list = (await api('GET', '/api/followups')).data;
   const row = list.rows.find((r) => r.lead_id === old);
-  assert.equal(row.number, 321);
+  assert.equal(String(row.number), '321');
   assert.equal(row.has_pdf, false);
   assert.ok(!list.rows.some((r) => r.lead_id === deriv));
   assert.ok(list.hidden_without_quote >= 1);
@@ -254,4 +262,69 @@ test('alertas: conversación derivada sin atender envía correo a contacto; no r
   assert.equal((await runAlerts()).length, 0);
   await api('PUT', '/api/settings', { body: { alert_enabled: '1' } });
   void sp; void fresh;
+});
+
+test('mismo cliente con varias cotizaciones cercanas: un solo seguimiento, un correo con todos los PDF y todos avanzan en el pipeline', async () => {
+  fakes.state.mails.length = 0;
+  const rut = validRut(80000123);
+  const a = await mkQuote('multi@cliente.cl', 'Cotizador', rut);
+  const b = await mkQuote('multi@cliente.cl', 'Cotizador', rut);
+  const c = await mkQuote('multi@cliente.cl', 'Cotizador', rut);
+  await query("UPDATE quotes SET quote_date = CURRENT_DATE - 20 WHERE id=$1", [a.id]);
+  // una cuarta cotización del mismo cliente, hecha hace 4 meses: queda aparte
+  const old = await mkQuote('multi@cliente.cl', 'Cotizador', rut);
+  await query("UPDATE quotes SET quote_date = CURRENT_DATE - 120 WHERE id=$1", [old.id]);
+  await query("UPDATE leads SET lead_date = CURRENT_DATE - 120 WHERE id=$1", [old.lead_id]);
+
+  const leads = [...new Set([a.lead_id, b.lead_id, c.lead_id, old.lead_id])];
+  const list = (await api('GET', '/api/followups')).data;
+  const rows = list.rows.filter((r) => r.lead_ids.some((i) => leads.includes(i)));
+  const grp = rows.find((r) => r.quote_count >= 2);
+  assert.ok(grp, 'hay un grupo');
+  assert.ok(grp.quotes.every((x) => x.number !== old.number), 'la antigua no entra al grupo de fechas cercanas');
+  assert.ok(grp.quotes.some((x) => x.number === a.number) && grp.quotes.some((x) => x.number === c.number));
+  const ids = grp.lead_ids;
+
+  const p = (await api('GET', `/api/followups/preview/${ids[0]}`)).data;
+  assert.match(p.subject, /cotizaciones N°/);
+  assert.match(p.text, /Detalle de las cotizaciones/);
+
+  const r = (await api('POST', '/api/followups/send', { body: { lead_ids: [ids[0]] } })).data;
+  assert.equal(r.sent, 1);
+  const mails = fakes.state.mails.filter((m) => m.to?.includes('multi@cliente.cl'));
+  assert.equal(mails.length, 1, 'un solo correo para el conjunto');
+  assert.ok((mails[0].attachments || []).length >= grp.quote_count, 'adjunta todos los PDF');
+  for (const id of ids) assert.equal(await stateOf(id), 'Seguimiento 1');
+  const log = (await api('GET', '/api/followups/log')).data.filter((x) => ids.includes(x.lead_id));
+  assert.equal(log.length, 1, 'un registro por envío en el historial');
+
+  // El pipeline manda: si se mueve a mano una de las cotizaciones, deja de ser parte del grupo y el seguimiento se actualiza
+  const cot = (await query("SELECT id FROM pipeline_states WHERE name='Cotizado'")).rows[0].id;
+  const lost = (await query("SELECT id FROM pipeline_states WHERE name ILIKE 'Perdido%' OR name ILIKE 'Archivado%' LIMIT 1")).rows[0].id;
+  await api('PUT', `/api/leads/${ids[0]}/move`, { body: { state_id: lost } });
+  const after = (await api('GET', '/api/followups')).data.rows;
+  assert.ok(!after.some((x) => x.lead_ids.includes(ids[0])), 'lo movido a mano sale del seguimiento');
+  assert.ok(after.some((x) => ids.slice(1).some((i) => x.lead_ids.includes(i))) || ids.length === 1);
+  void cot;
+});
+
+test('programación y modo se aplican a todo el conjunto del cliente', async () => {
+  const rut = validRut(80000456);
+  const a = await mkQuote('prog@cliente.cl', 'Cotizador', rut);
+  const b = await mkQuote('prog@cliente.cl', 'Cotizador', rut);
+  const row = (await api('GET', '/api/followups')).data.rows.find((r) => r.lead_ids.includes(a.lead_id));
+  const ids = row.lead_ids;
+  await api('POST', '/api/followups/mode', { body: { lead_ids: [row.lead_id], mode: 'pausado' } });
+  const modes = (await query('SELECT follow_mode FROM leads WHERE id = ANY($1::int[])', [ids])).rows.map((r) => r.follow_mode);
+  assert.ok(modes.every((m) => m === 'pausado'));
+  await api('POST', '/api/followups/mode', { body: { lead_ids: [row.lead_id], mode: 'manual' } });
+  const at = new Date(Date.now() + 3600e3).toISOString();
+  await api('POST', '/api/followups/schedule', { body: { lead_ids: [row.lead_id], at } });
+  const sch = (await query('SELECT follow_sched_at FROM leads WHERE id = ANY($1::int[])', [ids])).rows;
+  assert.ok(sch.every((r) => r.follow_sched_at));
+  // Mover a mano en el pipeline cancela la programación
+  const cot = (await query("SELECT id FROM pipeline_states WHERE name='Seguimiento 2'")).rows[0].id;
+  await api('PUT', `/api/leads/${ids[0]}/move`, { body: { state_id: cot } });
+  assert.equal((await query('SELECT follow_sched_at FROM leads WHERE id=$1', [ids[0]])).rows[0].follow_sched_at, null);
+  void b;
 });

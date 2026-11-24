@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { authenticate } from '../auth.js';
 import { HttpError } from '../util.js';
 import { query } from '../db.js';
-import { queue, advance, preview, history, runAuto, checkReplies, schedule, unschedule } from '../followup.js';
+import { queue, advance, preview, history, runAuto, checkReplies, schedule, unschedule, expandLeadIds } from '../followup.js';
 
 export const followupsRouter = Router();
 followupsRouter.use(authenticate);
@@ -30,7 +30,7 @@ followupsRouter.post('/send', async (req, res) => {
 followupsRouter.post('/mode', async (req, res) => {
   const mode = String(req.body?.mode || '');
   if (!['manual', 'auto', 'pausado'].includes(mode)) throw new HttpError(400, 'Modo inválido');
-  const list = ids(req.body);
+  const list = await expandLeadIds(ids(req.body));
   if (!list.length) throw new HttpError(400, 'Selecciona al menos una');
   await query('UPDATE leads SET follow_mode=$1 WHERE id = ANY($2::int[])', [mode, list]);
   res.json({ ok: true, updated: list.length });

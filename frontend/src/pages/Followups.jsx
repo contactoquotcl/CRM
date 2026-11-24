@@ -29,6 +29,13 @@ export default function Followups() {
     } catch (e) { setError(e.message); }
   }, [channel, stage]);
   useEffect(() => { load(); }, [load]);
+  // El pipeline manda: se refresca solo y al volver a la pestaña para reflejar movimientos manuales de etapa
+  useEffect(() => {
+    const t = setInterval(() => { if (!document.hidden) load(); }, 45000);
+    const onVis = () => { if (!document.hidden) load(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', onVis); };
+  }, [load]);
   useEffect(() => { setSel(new Set()); }, [stage, channel]);
 
   const rows = useMemo(() => (data?.rows || []).filter((r) => r.state_name === stage), [data, stage]);
@@ -126,10 +133,10 @@ export default function Followups() {
                 {rows.map((r) => (
                   <tr key={r.lead_id}>
                     <td><input type="checkbox" checked={sel.has(r.lead_id)} onChange={() => toggle(r.lead_id)} aria-label={`Seleccionar ${r.number}`} /></td>
-                    <td><strong>{r.number}</strong><div className="muted small">{r.quote_date ? fmtDate(r.quote_date) : ''}</div>{!r.has_pdf && <Badge color="#64748b">sin PDF</Badge>}</td>
+                    <td><strong>{r.number}</strong><div className="muted small">{r.quote_date ? fmtDate(r.quote_date) : ''}</div>{r.quote_count > 1 && <Badge color="#0ea5e9">{r.quote_count} cotizaciones del cliente</Badge>}{!r.has_pdf && <Badge color="#64748b">sin PDF</Badge>}</td>
                     <td>{r.razon_social}</td>
                     <td>{r.contact}<div className="muted small">{r.email || '—'}</div>{r.problems.map((p) => <Badge key={p} color="#dc2626">{p}</Badge>)}</td>
-                    <td className="num">{r.total > 0 ? clp(r.total) : '—'}</td>
+                    <td className="num">{r.total > 0 ? clp(r.total) : '—'}{r.quote_count > 1 && <div className="muted small">suma de {r.quote_count}</div>}</td>
                     <td>{r.days_in_state} d</td>
                     <td>{r.due ? <Badge color="#16a34a">ya toca</Badge> : <span className="muted">en {r.due_in_days} d</span>}{r.follow_sched_at && <div><Badge color="#7c3aed">Programado</Badge><div className="small">{fmtDT(r.follow_sched_at)}</div></div>}</td>
                     <td><Badge color={MODE[r.follow_mode]?.[1]}>{MODE[r.follow_mode]?.[0] || r.follow_mode}</Badge></td>

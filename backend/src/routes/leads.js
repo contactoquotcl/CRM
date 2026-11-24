@@ -88,7 +88,7 @@ leadsRouter.put('/:id/move', async (req, res) => {
     order.splice(idx, 0, id);
 
     if (cur.rows[0].state_id !== stateId) {
-      await t.query('UPDATE leads SET state_id=$1, state_date=$2, updated_at=now() WHERE id=$3', [stateId, today(), id]);
+      await t.query("UPDATE leads SET state_id=$1, state_date=$2, state_changed_at=now(), follow_sched_at=NULL, follow_sched_step='', updated_at=now() WHERE id=$3", [stateId, today(), id]);
     }
     await t.query(
       'UPDATE leads l SET sort_order = o.ord::int FROM unnest($1::int[]) WITH ORDINALITY AS o(id, ord) WHERE l.id = o.id',
@@ -136,7 +136,7 @@ leadsRouter.patch('/:id', async (req, res) => {
   const keys = Object.keys(l);
   if (!keys.length) throw new HttpError(400, 'Nada que actualizar');
   const extra = [];
-  if (l.state_id !== undefined && l.state_id !== cur.rows[0].state_id) extra.push(['state_date', today()], ['sort_order', 0]); // al cambiar de etapa entra arriba
+  if (l.state_id !== undefined && l.state_id !== cur.rows[0].state_id) extra.push(['state_date', today()], ['sort_order', 0], ['state_changed_at', new Date().toISOString()], ['follow_sched_at', null], ['follow_sched_step', '']); // al cambiar de etapa entra arriba
   const all = [...keys.map((k) => [k, l[k]]), ...extra];
   const sets = all.map(([k], i) => `${k}=$${i + 1}`).join(', ');
   await query(`UPDATE leads SET ${sets}, updated_at=now() WHERE id=$${all.length + 1}`, [...all.map(([, v]) => v), id]);
