@@ -130,3 +130,8 @@ Había 179 leads en «Cotizado» pero solo 20 con cotización registrada en el s
 - **Agrupación por cliente**: cotizaciones del mismo cliente (RUT; si no hay, correo) en la **misma etapa** y con fechas encadenadas a ≤ `followup_group_days` (30 por defecto, 0 = no agrupar, editable en Admin) se siguen como una sola fila: un correo (asunto/texto en plural, detalle con N°, fecha y monto de cada una, suma del total, todos los PDF adjuntos), un solo movimiento y un solo registro en el historial (`followup_emails.batch`). Cuenta una vez para el límite diario.
 - El modo (manual/auto/pausado), la programación y la pausa por respuesta del cliente se aplican a todo el conjunto; si algún miembro está pausado, el grupo queda pausado. Si una cotización se mueve a mano a otra etapa, sale del grupo (el pipeline manda).
 - Cotizaciones del mismo cliente con más de 30 días entre sí siguen siendo seguimientos separados.
+
+## 47. Menú lateral izquierdo (escritorio y móvil)
+- El menú superior pasó a una barra lateral fija a la izquierda (marca arriba, ítems con ícono, sección «Administración» solo para admins, usuario y «Salir» abajo; la insignia de conversaciones sin leer se mantiene).
+- En pantallas ≤ 900 px el menú es un cajón que se abre con el botón hamburguesa de una barra superior mínima (la insignia de no leídos también se ve ahí); se cierra al elegir una opción, al tocar fuera o con Esc.
+- Las alturas de la bandeja de conversaciones usan la variable `--topbar-h` (0 en escritorio, 52 px en móvil).
