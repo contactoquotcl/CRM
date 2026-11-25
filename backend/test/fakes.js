@@ -16,6 +16,7 @@ export async function startFakes({ pageSize = 5 } = {}) {
     mails: [],
     gmailSent: [],
     gmailReplies: new Set(),
+    gmailReplyText: {},
     mailFail: false,
     cwAgents: [],
     cwFail: new Set(), // rutas (substring) que deben fallar con 500
@@ -103,7 +104,7 @@ export async function startFakes({ pageSize = 5 } = {}) {
       const th = p.match(/\/threads\/(.+)$/);
       if (th) {
         const msgs = [{ labelIds: ['SENT'], payload: { headers: [{ name: 'From', value: 'Quot.cl <contacto@quot.cl>' }] } }];
-        if (state.gmailReplies.has(th[1])) msgs.push({ labelIds: ['INBOX'], payload: { headers: [{ name: 'From', value: 'Marta <marta@acme.cl>' }] } });
+        if (state.gmailReplies.has(th[1])) msgs.push({ id: 'r' + th[1], labelIds: ['INBOX'], payload: { mimeType: 'multipart/alternative', headers: [{ name: 'From', value: 'Marta <marta@acme.cl>' }], parts: [{ mimeType: 'text/plain', body: { data: Buffer.from((state.gmailReplyText[th[1]] || 'Gracias, lo reviso y les aviso.') + '\n\nEl lun, 23 nov 2026 Quot.cl <contacto@quot.cl> escribió:\n> Hola Marta, ¿pudiste revisar la cotización?').toString('base64url') } }] } });
         return json(res, 200, { messages: msgs });
       }
     }

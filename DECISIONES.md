@@ -135,3 +135,10 @@ Había 179 leads en «Cotizado» pero solo 20 con cotización registrada en el s
 - El menú superior pasó a una barra lateral fija a la izquierda (marca arriba, ítems con ícono, sección «Administración» solo para admins, usuario y «Salir» abajo; la insignia de conversaciones sin leer se mantiene).
 - En pantallas ≤ 900 px el menú es un cajón que se abre con el botón hamburguesa de una barra superior mínima (la insignia de no leídos también se ve ahí); se cierra al elegir una opción, al tocar fuera o con Esc.
 - Las alturas de la bandeja de conversaciones usan la variable `--topbar-h` (0 en escritorio, 52 px en móvil).
+
+## 48. Respuesta del cliente: lectura del correo y archivado automático si pide la baja
+- Solo con Gmail como proveedor (es el único que permite leer el hilo). Cada 15 min (junto con los automáticos, también fuera de horario) se revisan los hilos de los correos de seguimiento y de envío de cotización (`Cotizado`, `Seguimiento 1`, `Seguimiento 2`). Se lee el último mensaje del cliente sin el texto citado.
+- Si el cliente **pide dar de baja** (p. ej. «no gracias», «ya no necesitamos la cotización», «denme de baja», «compramos con otro proveedor», «no me interesa»), todo el conjunto de cotizaciones del cliente pasa a **Archivado** en el pipeline, queda pausado y se anota en los comentarios con un extracto de lo que dijo. No se le envía ningún correo de vuelta.
+- Detección por reglas, deliberadamente **conservadora**: si el mensaje tiene preguntas, un «pero…», habla de otra cotización/precio/plazo o es largo (> 600 caracteres), **no archiva**: solo pausa el seguimiento y anota lo que dijo para que un ejecutivo responda. Un falso «no archivar» cuesta una revisión; un falso archivado se corrige moviendo la tarjeta en el pipeline.
+- Se puede apagar en Admin («archivarla sola…»); apagado, toda respuesta solo pausa. Los envíos que hicieron las pausas siguen en el historial («El cliente pidió dar de baja la cotización: archivada»).
+- Pendiente de comprobar en producción: que el permiso del token de Gmail permita leer el cuerpo del mensaje (hoy ya lee los hilos para detectar respuestas).

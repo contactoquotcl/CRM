@@ -246,6 +246,7 @@ function Settings() {
       </div>
       <label className="check"><input type="checkbox" checked={s.followup_business_hours !== '0'} onChange={(e) => { setOk(false); setS({ ...s, followup_business_hours: e.target.checked ? '1' : '0' }); }} /> Enviar los automáticos solo en horario hábil (lun–vie, 9:00–18:00 hora de Chile)</label>
       <label className="check"><input type="checkbox" checked={s.followup_send_on_archive === '1'} onChange={(e) => { setOk(false); setS({ ...s, followup_send_on_archive: e.target.checked ? '1' : '0' }); }} /> Enviar un correo de cierre al archivar (si no, se archiva sin avisar)</label>
+      <label className="check"><input type="checkbox" checked={s.followup_auto_archive !== '0'} onChange={(e) => { setOk(false); setS({ ...s, followup_auto_archive: e.target.checked ? '1' : '0' }); }} /> Si el cliente responde pidiendo dar de baja la cotización, archivarla sola en el pipeline (requiere Gmail; si no, solo se pausa)</label>
       {[['s1', 'Seguimiento 1'], ['s2', 'Seguimiento 2'], ['close', 'Cierre (al archivar)']].map(([k, t]) => (
         <fieldset key={k} className="panel stack"><legend>{t}</legend>
           <Field label="Asunto"><input value={s[`followup_${k}_subject`]} onChange={set(`followup_${k}_subject`)} /></Field>

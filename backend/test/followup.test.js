@@ -1,6 +1,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { startFakes } from './fakes.js';
+import { wantsBaja } from '../src/followup.js';
 
 process.env.PGLITE_DIR = 'memory://';
 process.env.ADMIN_EMAIL = 'admin@test.cl';
@@ -337,4 +338,44 @@ test('el seguimiento muestra quién creó la cotización (usuario o Chatbot)', a
   const rows = (await api('GET', '/api/followups')).data.rows;
   assert.deepEqual(rows.find((r) => r.lead_ids.includes(bot.lead_id)).created_by_names, ['Chatbot']);
   assert.deepEqual(rows.find((r) => r.lead_ids.includes(hum.lead_id)).created_by_names, [u.name]);
+});
+
+test('wantsBaja: pide baja sí; preguntas, «pero…» o mensajes ambiguos no', () => {
+  for (const t of ['No gracias', 'Hola, ya no necesitamos la cotización. Saludos', 'Por favor denme de baja esta cotización', 'No me interesa, gracias', 'Compramos con otro proveedor, cancelen la cotización', 'Estimados, no estamos interesados']) assert.equal(wantsBaja(t), true, t);
+  for (const t of ['Gracias, lo reviso y les aviso', 'No gracias, pero ¿tienen otra marca?', 'Ya no necesito esa, necesito cotizar otra con descuento', 'Me interesa, ¿cuál es el plazo de entrega?', 'No me interesa ahora, tal vez más adelante', '']) assert.equal(wantsBaja(t), false, t);
+});
+
+test('respuesta del cliente leída: si pide baja se archiva todo el conjunto; si no, solo se pausa', async () => {
+  await api('PUT', '/api/integrations', { body: { values: { EMAIL_PROVIDER: 'gmail', GMAIL_CLIENT_ID: 'cid.apps.googleusercontent.com', GMAIL_CLIENT_SECRET: 'GOCSPX-secret', GMAIL_REFRESH_TOKEN: 'rt_ok' } } });
+  const mk = async (email, rut) => {
+    const q = await mkQuote(email, 'Cotizador', rut);
+    await api('POST', '/api/followups/send', { body: { lead_ids: [q.lead_id] } });
+    const th = (await query("SELECT thread_id FROM followup_emails WHERE lead_id=$1 AND status='enviado' ORDER BY id DESC", [q.lead_id])).rows[0].thread_id;
+    return { q, th };
+  };
+  const stateName = async (id) => stateOf(id);
+  // 1) pide baja
+  const a = await mk('baja@cliente.cl', validRut(81000111));
+  fakes.state.gmailReplies.add(a.th); fakes.state.gmailReplyText[a.th] = 'Hola, ya no necesitamos la cotización, gracias.';
+  // 2) responde otra cosa
+  const b = await mk('duda@cliente.cl', validRut(81000222));
+  fakes.state.gmailReplies.add(b.th); fakes.state.gmailReplyText[b.th] = 'No gracias, pero ¿tienen otra marca más barata?';
+  const r = (await api('POST', '/api/followups/check-replies')).data;
+  const ra = r.replied.find((x) => x.lead_id === a.q.lead_id), rb = r.replied.find((x) => x.lead_id === b.q.lead_id);
+  assert.equal(ra.archived, true);
+  assert.equal(rb.archived, false);
+  assert.equal(await stateName(a.q.lead_id), 'Archivado');
+  assert.equal(await stateName(b.q.lead_id), 'Seguimiento 1');
+  assert.equal((await query('SELECT follow_mode FROM leads WHERE id=$1', [b.q.lead_id])).rows[0].follow_mode, 'pausado');
+  const ca = (await query('SELECT comments FROM leads WHERE id=$1', [a.q.lead_id])).rows[0].comments;
+  assert.match(ca, /archivada automáticamente/);
+  assert.match(ca, /ya no necesitamos/);
+  assert.ok(!/escribió/.test(ca), 'no incluye el texto citado');
+  // con la opción apagada solo pausa
+  await api('PUT', '/api/settings', { body: { followup_auto_archive: '0' } });
+  const c = await mk('off@cliente.cl', validRut(81000333));
+  fakes.state.gmailReplies.add(c.th); fakes.state.gmailReplyText[c.th] = 'No gracias';
+  await api('POST', '/api/followups/check-replies');
+  assert.equal(await stateName(c.q.lead_id), 'Seguimiento 1');
+  await api('PUT', '/api/settings', { body: { followup_auto_archive: '1' } });
 });

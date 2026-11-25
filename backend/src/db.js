@@ -152,6 +152,7 @@ const DEFAULT_SETTINGS = {
   quote_mail_body: 'Hola {contacto},\n\nGracias por cotizar con Quot. Adjuntamos tu cotización N° {numero} por {total} IVA incluido, válida hasta el {vence}.\n\nEl PDF incluye los datos para pagar por transferencia. Si necesitas ajustar cantidades o tienes dudas, responde este correo y un ejecutivo te ayudará.\n\nSaludos cordiales,\nEquipo Quot.cl\ncontacto@quot.cl',
   conversion_window_days: '120',
   followup_group_days: '30',
+  followup_auto_archive: '1',
   alert_enabled: '1',
   alert_email: 'contacto@quot.cl',
   alert_minutes: '3',

@@ -2,7 +2,7 @@
 // Cada envío queda en `followup_emails` (quién, cuándo, a quién, estado, error) y mueve el lead de etapa.
 import { query, getSettings } from './db.js';
 import { quotePdfBuffer } from './quoteService.js';
-import { mailEnabled, sendMail, mailLabel, gmailThreadHasReply } from './mailer.js';
+import { mailEnabled, sendMail, mailLabel, gmailThreadReplies } from './mailer.js';
 import { mailConfig } from './config.js';
 import { clp, today } from './util.js';
 import { randomUUID } from 'node:crypto';
@@ -235,28 +235,72 @@ export function inBusinessHours(date = new Date()) {
   return !['Sat', 'Sun'].includes(p.weekday) && Number(p.hour) >= 9 && Number(p.hour) < 18;
 }
 
+const plain = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+const BAJA = [
+  /\bno gracias\b/, /no me interesa/, /no nos interesa/, /no estoy interesad/, /no estamos interesad/, /sin interes/,
+  /dar(me|nos|le)? de baja/, /(den|denme|denos|dense|demen) de baja/, /de baja (la|esa|esta|mi|nuestra)/, /(darla|darlo|dar) por (cerrada|cerrado|cancelada|anulada|terminada)/,
+  /ya no (necesit|requier|nos interesa|me interesa|estamos interesad|estoy interesad|vamos a|voy a|lo necesit|la necesit)/,
+  /no (necesito|necesitamos|requiero|requerimos) (ya |mas |por ahora |la cotizacion|los productos|esto)/,
+  /(cancel|anul|desestim)(ar|e|en|o|amos|ada|ado)\b.{0,40}(cotizacion|pedido|compra|solicitud)/, /(cotizacion|solicitud).{0,40}(cancel|anul|desestim)/,
+  /no (seguiremos|vamos a (seguir|continuar|comprar|avanzar)|continuaremos|compraremos|concretaremos)/,
+  /(dejen|deje|dejar) de (escribir|enviar|contactar|molestar)/, /no (me|nos) (contacten|escriban|envien|llamen|molesten)/, /(eliminen|elimine|quiten|saquen|borren).{0,40}(lista|correos|contactos|base)/,
+  /(ya|se) (compramos|compre|resolvimos|resolvi|adquirimos|adquiri)\b/, /compramos (en otro|con otro|a otro)/,
+];
+const KEEP = /\?|\b(pero|sin embargo|aunque|ademas|por otro lado|en cambio)\b|(otra (marca|cotizacion|opcion|alternativa|version)|otro (modelo|producto|equipo)|nueva cotizacion|alternativ|mas adelante|despues|proxim|futuro|cotizar|precio|descuento|rebaja|plazo|stock)/;
+const SOLO_NO = /^(hola|buenas|buen dia|buenas tardes|estimad[oa]s?|gracias)?[ ,.!]*(no gracias|no me interesa|no nos interesa|ya no (la |lo )?(necesit|requier)\w*)\W*$/;
+/** ¿El cliente pide dar de baja la cotización? Conservador: ante la duda (preguntas, «pero…», mensajes largos) no archiva y solo pausa. */
+export function wantsBaja(text) {
+  const t = plain(text).replace(/\s+/g, ' ').trim();
+  if (!t || t.length > 600) return false;
+  if (!BAJA.some((r) => r.test(t))) return false;
+  if (SOLO_NO.test(t)) return true;
+  const rest = t.replace(/no (me|nos) interesa(n)?|no gracias|ya no (necesit|requier)\w*|dar(me|nos)? de baja|de baja/g, '');
+  return !KEEP.test(rest);
+}
+
 /**
- * Con Gmail: si el cliente respondió en el hilo del correo de seguimiento, el lead pasa a «Pausado» solo,
- * queda registrado en el historial y en el lead. Sin Gmail no hace nada.
+ * Con Gmail: si el cliente respondió en el hilo del correo de seguimiento (o del envío de la cotización), se lee su respuesta:
+ * si pide dar de baja la cotización, todo el conjunto pasa a «Archivado» en el pipeline; en cualquier otro caso el lead pasa a «Pausado»
+ * para que un ejecutivo conteste. Queda registrado en el historial y en el lead. Sin Gmail no hace nada.
  */
 export async function checkReplies() {
   if (mailConfig().provider !== 'gmail' || !mailEnabled()) return [];
+  const st = await getSettings();
+  const autoArchive = st.followup_auto_archive !== '0';
   const { rows } = await query(
-    `SELECT DISTINCT ON (l.id) l.id AS lead_id, f.quote_id, f.quote_number AS number, f.thread_id, f.batch, l.comments, f.to_email
+    `SELECT DISTINCT ON (l.id) l.id AS lead_id, f.quote_id, f.quote_number AS number, f.thread_id, f.batch, f.to_email
        FROM leads l JOIN pipeline_states s ON s.id=l.state_id
        JOIN followup_emails f ON f.lead_id=l.id AND f.status='enviado' AND f.thread_id <> ''
-      WHERE l.follow_mode <> 'pausado' AND lower(s.name) IN ('seguimiento 1','seguimiento 2')
+      WHERE l.follow_mode <> 'pausado' AND lower(s.name) IN ('cotizado','seguimiento 1','seguimiento 2')
       ORDER BY l.id, f.id DESC LIMIT 100`);
   const out = [];
+  const done = new Set();
+  const archId = (await query("SELECT id FROM pipeline_states WHERE lower(name) LIKE 'archiv%' ORDER BY id LIMIT 1")).rows[0]?.id || null;
   for (const r of rows) {
+    if (done.has(r.lead_id)) continue;
+    let replies;
     try {
-      if (!(await gmailThreadHasReply(r.thread_id))) continue;
+      replies = await gmailThreadReplies(r.thread_id);
     } catch (e) { console.error('[seguimiento] revisión de respuestas falló:', e.message); break; }
-    const mates = r.batch ? (await query("SELECT DISTINCT lead_id FROM followup_emails WHERE batch=$1", [r.batch])).rows.map((x) => x.lead_id) : [r.lead_id];
+    if (!replies.length) continue;
+    const mates = r.batch ? (await query('SELECT DISTINCT lead_id FROM followup_emails WHERE batch=$1', [r.batch])).rows.map((x) => x.lead_id) : [r.lead_id];
+    mates.forEach((i) => done.add(i));
+    const last = replies[replies.length - 1].text;
+    const baja = autoArchive && !!archId && wantsBaja(last);
+    const excerpt = last.replace(/\s+/g, ' ').slice(0, 220);
+    const subject = baja ? 'El cliente pidió dar de baja la cotización: archivada' : 'El cliente respondió';
     await query("UPDATE leads SET follow_mode='pausado' WHERE id = ANY($1::int[])", [mates]);
-    await query("INSERT INTO followup_emails(quote_id, lead_id, quote_number, step, to_email, subject, status, trigger, provider, thread_id) VALUES($1,$2,$3,'reply',$4,'El cliente respondió','respuesta','auto','gmail',$5)", [r.quote_id, r.lead_id, r.number || '', r.to_email || '', r.thread_id]);
-    await query('UPDATE leads SET comments=$1, updated_at=now() WHERE id=$2', [[r.comments, `[${today()}] El cliente respondió el correo de seguimiento: seguimiento pausado. Revisar la casilla y contactarlo.`].filter(Boolean).join('\n'), r.lead_id]);
-    out.push({ lead_id: r.lead_id, number: r.number });
+    for (const id of mates) {
+      await query("INSERT INTO followup_emails(quote_id, lead_id, quote_number, step, to_email, subject, status, trigger, provider, thread_id, batch, error) VALUES($1,$2,$3,'reply',$4,$5,'respuesta','auto','gmail',$6,$7,$8)", [id === r.lead_id ? r.quote_id : null, id, String(r.number ?? ''), r.to_email, subject, r.thread_id, r.batch || '', excerpt]);
+      const cur = (await query('SELECT comments FROM leads WHERE id=$1', [id])).rows[0]?.comments || '';
+      const note = baja
+        ? `[${today()}] El cliente respondió pidiendo dar de baja la cotización (“${excerpt}”): archivada automáticamente.`
+        : `[${today()}] El cliente respondió el correo de seguimiento: seguimiento pausado. Revisar la casilla y contactarlo.${excerpt ? ` Dijo: “${excerpt}”` : ''}`;
+      const comments = [cur, note].filter(Boolean).join('\n');
+      if (baja) await query("UPDATE leads SET state_id=$1, state_date=$2, state_changed_at=now(), follow_sched_at=NULL, follow_sched_step='', comments=$3, updated_at=now() WHERE id=$4", [archId, today(), comments, id]);
+      else await query('UPDATE leads SET comments=$1, updated_at=now() WHERE id=$2', [comments, id]);
+    }
+    out.push({ lead_id: r.lead_id, number: r.number, archived: baja });
   }
   return out;
 }

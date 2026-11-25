@@ -35,14 +35,40 @@ async function gmailFetch(path, init = {}) {
   if (!r.ok) throw new Error(`Gmail ${r.status}: ${j.error?.message || 'error'}`);
   return j;
 }
-/** ¿Respondió el cliente en el hilo? (algún mensaje que no sea de nuestra casilla) */
-export async function gmailThreadHasReply(threadId) {
+const b64 = (d) => Buffer.from(String(d || ''), 'base64url').toString('utf8');
+function bodyText(part) {
+  if (!part) return '';
+  const plain = []; const html = [];
+  (function walk(x) {
+    if (x.body?.data && /^text\/plain/i.test(x.mimeType || '')) plain.push(b64(x.body.data));
+    else if (x.body?.data && /^text\/html/i.test(x.mimeType || '')) html.push(b64(x.body.data));
+    (x.parts || []).forEach(walk);
+  })(part);
+  if (plain.length) return plain.join('\n');
+  return html.join('\n').replace(/<(br|\/p|\/div)[^>]*>/gi, '\n').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&');
+}
+/** Quita la cita del correo original y la firma habitual: deja lo que el cliente escribió. */
+export function stripQuoted(text) {
+  const lines = String(text || '').replace(/\r/g, '').split('\n');
+  const out = [];
+  for (const l of lines) {
+    if (/^\s*>/.test(l) || /^\s*(El .{5,120} escribi[óo]:?|On .{5,120} wrote:?|-{2,}\s*(Mensaje original|Original Message)|De:\s|From:\s)/i.test(l)) break;
+    out.push(l);
+  }
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+/** Mensajes del cliente en el hilo (los que no son de nuestra casilla), del más antiguo al más nuevo, con su texto propio. */
+export async function gmailThreadReplies(threadId) {
   const c = mailConfig();
-  const j = await gmailFetch(`/gmail/v1/users/me/threads/${encodeURIComponent(threadId)}?format=metadata&metadataHeaders=From`);
-  return (j.messages || []).some((m) => {
+  const j = await gmailFetch(`/gmail/v1/users/me/threads/${encodeURIComponent(threadId)}?format=full`);
+  return (j.messages || []).filter((m) => {
     const from = ((m.payload?.headers || []).find((h) => h.name.toLowerCase() === 'from') || {}).value || '';
     return !from.toLowerCase().includes(c.fromEmail.toLowerCase()) && !(m.labelIds || []).includes('SENT');
-  });
+  }).map((m) => ({ id: m.id || '', text: stripQuoted(bodyText(m.payload)).slice(0, 4000) }));
+}
+/** ¿Respondió el cliente en el hilo? (algún mensaje que no sea de nuestra casilla) */
+export async function gmailThreadHasReply(threadId) {
+  return (await gmailThreadReplies(threadId)).length > 0;
 }
 
 /** @param {{to:string, subject:string, text:string, attachments?:{filename:string, content:Buffer}[]}} m  @returns {Promise<{id:string, provider:string}>} */
