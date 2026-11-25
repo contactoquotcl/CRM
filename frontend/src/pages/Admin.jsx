@@ -107,13 +107,13 @@ function Users() {
   return (
     <div className="panel stack">
       <div className="row between">
-        <p className="muted">Administrador: todo, incluida la maestra de productos, estados, usuarios e importación. Estándar: pipeline y cotizador; consulta productos.</p>
+        <p className="muted">Administrador: todo, incluida la maestra de productos, estados, usuarios e importación. Estándar: pipeline y cotizador; consulta productos. Órdenes de compra: siempre para administradores; para los demás se habilita por usuario.</p>
         <button className="btn primary" onClick={() => setCreating(true)}>+ Nuevo usuario</button>
       </div>
       <Alert>{error}</Alert>
       <div className="table-wrap">
         <table>
-          <thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Estado</th><th /></tr></thead>
+          <thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Órdenes de compra</th><th>Estado</th><th /></tr></thead>
           <tbody>
             {rows.map((u) => (
               <tr key={u.id}>
@@ -125,6 +125,7 @@ function Users() {
                     <option value="user">Estándar</option>
                   </select>
                 </td>
+                <td>{u.role === 'admin' ? <span className="muted">Siempre</span> : <label className="check"><input type="checkbox" checked={!!u.can_purchase_orders} onChange={(e) => patch(u.id, { can_purchase_orders: e.target.checked })} /> Habilitado</label>}</td>
                 <td>{u.active ? <Badge color="#16a34a">Activo</Badge> : <Badge color="#9ca3af">Desactivado</Badge>}</td>
                 <td className="row">
                   <button className="btn small" onClick={() => setResetFor(u)}>Restablecer clave</button>
@@ -222,6 +223,7 @@ function Settings() {
         <Field label="Correo"><input value={s.bank_email || ''} onChange={set('bank_email')} /></Field>
       </div>
       <Field label="Condiciones comerciales (pie del PDF)"><textarea rows={5} value={s.quote_terms} onChange={set('quote_terms')} /></Field>
+      <Field label="Condiciones de las órdenes de compra (pie del PDF)"><textarea rows={3} value={s.po_terms || ''} onChange={set('po_terms')} /></Field>
       <h3>Cotizaciones del chatbot: envío automático por correo</h3>
       <p className="muted small">Al generar una cotización el bot, se envía al correo del cliente con el PDF adjunto. Variables: {'{contacto} {empresa} {numero} {total} {fecha} {vence}'}. Usa el servicio de correo de Integraciones.</p>
       <label className="check"><input type="checkbox" checked={s.quote_mail_enabled !== '0'} onChange={(e) => { setOk(false); setS({ ...s, quote_mail_enabled: e.target.checked ? '1' : '0' }); }} /> Enviar automáticamente la cotización al correo del cliente</label>

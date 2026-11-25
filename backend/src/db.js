@@ -108,6 +108,58 @@ CREATE TABLE IF NOT EXISTS invoices (
 CREATE INDEX IF NOT EXISTS invoices_fecha_idx ON invoices(fecha);
 CREATE INDEX IF NOT EXISTS invoices_rut_idx ON invoices(rut);
 
+CREATE TABLE IF NOT EXISTS suppliers (
+  id SERIAL PRIMARY KEY,
+  rut TEXT NOT NULL,
+  rut_key TEXT NOT NULL UNIQUE,
+  razon_social TEXT NOT NULL,
+  phone TEXT NOT NULL DEFAULT '',
+  email TEXT NOT NULL DEFAULT '',
+  contact TEXT NOT NULL DEFAULT '',
+  address TEXT NOT NULL DEFAULT '',
+  payment_terms TEXT NOT NULL DEFAULT '',
+  notes TEXT NOT NULL DEFAULT '',
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS purchase_orders (
+  id SERIAL PRIMARY KEY,
+  number INTEGER NOT NULL UNIQUE,
+  po_date DATE NOT NULL,
+  supplier_id INTEGER REFERENCES suppliers(id) ON DELETE SET NULL,
+  rut TEXT NOT NULL DEFAULT '',
+  razon_social TEXT NOT NULL DEFAULT '',
+  email TEXT NOT NULL DEFAULT '',
+  contact TEXT NOT NULL DEFAULT '',
+  phone TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'Emitida',
+  delivery_date DATE,
+  delivery_address TEXT NOT NULL DEFAULT '',
+  payment_terms TEXT NOT NULL DEFAULT '',
+  notes TEXT NOT NULL DEFAULT '',
+  iva_rate INTEGER NOT NULL DEFAULT 19,
+  subtotal INTEGER NOT NULL DEFAULT 0,
+  iva INTEGER NOT NULL DEFAULT 0,
+  total INTEGER NOT NULL DEFAULT 0,
+  created_by INTEGER,
+  sent_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS purchase_order_items (
+  id SERIAL PRIMARY KEY,
+  po_id INTEGER NOT NULL REFERENCES purchase_orders(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL DEFAULT 0,
+  product_id INTEGER REFERENCES products(id) ON DELETE SET NULL,
+  sku TEXT NOT NULL DEFAULT '',
+  description TEXT NOT NULL DEFAULT '',
+  qty INTEGER NOT NULL DEFAULT 1,
+  unit_cost INTEGER NOT NULL DEFAULT 0,
+  line_total INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS quote_items (
   id SERIAL PRIMARY KEY,
   quote_id INTEGER NOT NULL REFERENCES quotes(id) ON DELETE CASCADE,
@@ -163,6 +215,8 @@ const DEFAULT_SETTINGS = {
   bank_account_number: '1035865570',
   bank_email: 'contacto@quot.cl',
   quote_next_number: '1',
+  po_next_number: '65',
+  po_terms: '',
   quote_validity_days: '15',
   quote_terms:
     'Valores netos en pesos chilenos (CLP), más IVA.\nForma de pago: según acuerdo comercial.\nDisponibilidad y plazos de entrega sujetos a stock al momento de la orden de compra.',
@@ -233,6 +287,7 @@ export async function initDb() {
     ALTER TABLE quotes ADD COLUMN IF NOT EXISTS conversation_id INTEGER;
     ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS margin_pct DOUBLE PRECISION NOT NULL DEFAULT 0;
     ALTER TABLE leads ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS can_purchase_orders BOOLEAN NOT NULL DEFAULT FALSE;
   `);
 
   // Orden manual dentro de cada etapa (sort_order ascendente; los leads nuevos entran con 0 = arriba).

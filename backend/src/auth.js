@@ -18,7 +18,8 @@ export const checkPassword = (p, h) => bcrypt.compareSync(p, h);
 export const signToken = (user) =>
   jwt.sign({ sub: user.id }, secret(), { expiresIn: process.env.JWT_EXPIRES || '12h' });
 
-export const publicUser = (u) => ({ id: u.id, email: u.email, name: u.name, role: u.role, active: u.active });
+export const canPurchase = (u) => u?.role === 'admin' || !!u?.can_purchase_orders;
+export const publicUser = (u) => ({ id: u.id, email: u.email, name: u.name, role: u.role, active: u.active, perms: { purchase_orders: canPurchase(u) } });
 
 export async function authenticate(req, _res, next) {
   const h = req.headers.authorization || '';
@@ -39,6 +40,12 @@ export async function authenticate(req, _res, next) {
 
 export function requireAdmin(req, _res, next) {
   if (req.user?.role !== 'admin') throw new HttpError(403, 'Requiere rol administrador');
+  next();
+}
+
+/** Órdenes de compra: siempre para administradores; para los demás perfiles se habilita por usuario desde Admin. */
+export function requirePurchasing(req, _res, next) {
+  if (!canPurchase(req.user)) throw new HttpError(403, 'No tienes habilitado el módulo de órdenes de compra');
   next();
 }
 

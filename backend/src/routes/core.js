@@ -33,7 +33,7 @@ export const usersRouter = Router();
 usersRouter.use(authenticate, requireAdmin);
 
 usersRouter.get('/', async (_req, res) => {
-  const { rows } = await query('SELECT id,email,name,role,active,created_at FROM users ORDER BY id');
+  const { rows } = await query('SELECT id,email,name,role,active,can_purchase_orders,created_at FROM users ORDER BY id');
   res.json(rows);
 });
 
@@ -65,14 +65,15 @@ usersRouter.patch('/:id', async (req, res) => {
     const { rows: a } = await query("SELECT COUNT(*)::int AS n FROM users WHERE role='admin' AND active AND id<>$1", [id]);
     if (a[0].n === 0) throw new HttpError(400, 'Debe quedar al menos un administrador activo');
   }
+  const canPO = req.body.can_purchase_orders === undefined ? u.can_purchase_orders : !!req.body.can_purchase_orders;
   let hash = u.password_hash;
   if (req.body.password) {
     if (String(req.body.password).length < 8) throw new HttpError(400, 'La contraseña debe tener al menos 8 caracteres');
     hash = hashPassword(String(req.body.password));
   }
   const out = await query(
-    'UPDATE users SET name=$1, role=$2, active=$3, password_hash=$4 WHERE id=$5 RETURNING id,email,name,role,active',
-    [str(req.body.name) || u.name, role, active, hash, id]
+    'UPDATE users SET name=$1, role=$2, active=$3, password_hash=$4, can_purchase_orders=$6 WHERE id=$5 RETURNING id,email,name,role,active,can_purchase_orders',
+    [str(req.body.name) || u.name, role, active, hash, id, canPO]
   );
   res.json(out.rows[0]);
 });
@@ -83,7 +84,7 @@ settingsRouter.use(authenticate);
 
 settingsRouter.get('/', async (_req, res) => res.json(await getSettings()));
 
-const EDITABLE = ['company_name', 'company_rut', 'company_address', 'company_email', 'company_phone', 'company_web', 'iva_rate', 'quote_next_number', 'quote_validity_days', 'quote_terms', 'chatbot_enabled', 'spam_detection', 'bot_default_margin', 'bot_price_source', 'bot_quote_handoff_clp', 'woo_cart_plugin', 'followup_s1_subject', 'followup_s1_body', 'followup_s2_subject', 'followup_s2_body', 'followup_close_subject', 'followup_close_body', 'followup_send_on_archive', 'followup_days_s1', 'followup_days_s2', 'followup_days_close', 'followup_daily_limit', 'followup_business_hours', 'conversion_window_days', 'followup_group_days', 'followup_auto_archive', 'quote_mail_enabled', 'quote_mail_subject', 'quote_mail_body', 'alert_enabled', 'alert_email', 'alert_minutes', 'bank_holder', 'bank_rut', 'bank_name', 'bank_account_type', 'bank_account_number', 'bank_email'];
+const EDITABLE = ['company_name', 'company_rut', 'company_address', 'company_email', 'company_phone', 'company_web', 'iva_rate', 'quote_next_number', 'quote_validity_days', 'quote_terms', 'chatbot_enabled', 'spam_detection', 'bot_default_margin', 'bot_price_source', 'bot_quote_handoff_clp', 'woo_cart_plugin', 'followup_s1_subject', 'followup_s1_body', 'followup_s2_subject', 'followup_s2_body', 'followup_close_subject', 'followup_close_body', 'followup_send_on_archive', 'followup_days_s1', 'followup_days_s2', 'followup_days_close', 'followup_daily_limit', 'followup_business_hours', 'conversion_window_days', 'po_terms', 'followup_group_days', 'followup_auto_archive', 'quote_mail_enabled', 'quote_mail_subject', 'quote_mail_body', 'alert_enabled', 'alert_email', 'alert_minutes', 'bank_holder', 'bank_rut', 'bank_name', 'bank_account_type', 'bank_account_number', 'bank_email'];
 settingsRouter.put('/', requireAdmin, async (req, res) => {
   const body = req.body || {};
   if (body.quote_next_number !== undefined) {

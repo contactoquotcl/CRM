@@ -36,10 +36,10 @@ export const api = {
   patch: (p, b) => request('PATCH', p, b ?? {}),
   del: (p) => request('DELETE', p),
   // Abre un PDF protegido (necesita el token) en una pestaña nueva.
-  async openPdf(quoteId) {
+  async openPdf(id, kind = 'quotes') {
     const win = window.open('', '_blank');
     try {
-      const res = await request('GET', `/api/quotes/${quoteId}/pdf`, undefined, { raw: true });
+      const res = await request('GET', `/api/${kind}/${id}/pdf`, undefined, { raw: true });
       const url = URL.createObjectURL(await res.blob());
       if (win) win.location.href = url;
       else window.location.href = url;

@@ -9,6 +9,9 @@ import Quoter from './pages/Quoter.jsx';
 import Quotes from './pages/Quotes.jsx';
 import Followups from './pages/Followups.jsx';
 import Conversion from './pages/Conversion.jsx';
+import PurchaseOrders from './pages/PurchaseOrders.jsx';
+import PurchaseOrderForm from './pages/PurchaseOrderForm.jsx';
+import Suppliers from './pages/Suppliers.jsx';
 import Import from './pages/Import.jsx';
 import Admin from './pages/Admin.jsx';
 import Conversations from './pages/Conversations.jsx';
@@ -78,6 +81,8 @@ const ICONS = {
   mail: 'M3 6h18v12H3z M3 7l9 6 9-6',
   box: 'M3 7l9-4 9 4v10l-9 4-9-4z M3 7l9 4 9-4 M12 11v10',
   chart: 'M4 20V10 M10 20V4 M16 20v-7 M22 20H2',
+  cart: 'M3 4h2l2.4 11h10.2l2-8H6.2 M9 20h.01 M17 20h.01',
+  truck: 'M2 6h11v10H2z M13 10h5l3 3v3h-8z M6 19h.01 M17 19h.01',
   upload: 'M12 16V4 M7 9l5-5 5 5 M4 20h16',
   sliders: 'M4 6h10 M18 6h2 M4 12h4 M12 12h8 M4 18h12 M20 18h0 M14 4v4 M10 10v4 M18 16v4',
 };
@@ -87,6 +92,7 @@ const Icon = ({ name }) => (
 
 function Shell() {
   const { user, logout, isAdmin } = useAuth();
+  const canPO = !!user?.perms?.purchase_orders;
   const [account, setAccount] = useState(false);
   const [unread, setUnread] = useState(0);
   const [open, setOpen] = useState(false); // menú lateral en móvil
@@ -127,6 +133,9 @@ function Shell() {
           <Item to="/cotizaciones" icon="quotes">Cotizaciones</Item>
           <Item to="/seguimiento" icon="mail">Seguimiento</Item>
           <Item to="/productos" icon="box">Productos</Item>
+          {canPO && <div className="nav-section">Compras</div>}
+          {canPO && <Item to="/ordenes-compra" icon="cart">Órdenes de compra</Item>}
+          {canPO && <Item to="/proveedores" icon="truck">Proveedores</Item>}
           {isAdmin && <div className="nav-section">Administración</div>}
           {isAdmin && <Item to="/conversion" icon="chart">Conversión</Item>}
           {isAdmin && <Item to="/importar" icon="upload">Importar</Item>}
@@ -146,6 +155,9 @@ function Shell() {
             <Route path="/cotizaciones" element={<Quotes />} />
             <Route path="/seguimiento" element={<Followups />} />
             <Route path="/productos" element={<Products />} />
+            <Route path="/ordenes-compra" element={canPO ? <PurchaseOrders /> : <Navigate to="/" />} />
+            <Route path="/ordenes-compra/:id" element={canPO ? <PurchaseOrderForm /> : <Navigate to="/" />} />
+            <Route path="/proveedores" element={canPO ? <Suppliers /> : <Navigate to="/" />} />
             <Route path="/conversion" element={isAdmin ? <Conversion /> : <Navigate to="/" />} />
             <Route path="/importar" element={isAdmin ? <Import /> : <Navigate to="/" />} />
             <Route path="/admin" element={isAdmin ? <Admin /> : <Navigate to="/" />} />

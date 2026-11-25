@@ -5,6 +5,7 @@ import rateLimit from 'express-rate-limit';
 import { authRouter, usersRouter, settingsRouter, productsRouter, statesRouter } from './routes/core.js';
 import { leadsRouter, importRouter } from './routes/leads.js';
 import { quotesRouter } from './routes/quotes.js';
+import { suppliersRouter, purchaseOrdersRouter } from './routes/purchasing.js';
 import { wooWebhookRouter, catalogRouter } from './routes/woo.js';
 import { chatwootWebhookRouter } from './routes/chatwoot.js';
 import { chatbotRouter } from './routes/chatbot.js';
@@ -64,6 +65,8 @@ export function createApp() {
   app.use('/api/states', statesRouter);
   app.use('/api/leads', leadsRouter);
   app.use('/api/quotes', quotesRouter);
+  app.use('/api/suppliers', suppliersRouter);
+  app.use('/api/purchase-orders', purchaseOrdersRouter);
   app.use('/api/import', importRouter);
   app.use('/api/catalog', catalogRouter);
   app.use('/api/chatbot', chatbotRouter);
