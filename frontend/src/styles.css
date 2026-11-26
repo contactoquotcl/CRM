@@ -306,7 +306,7 @@ img, svg { max-width: 100%; }
 .app { display: flex; min-height: 100vh; }
 .content { flex: 1; min-width: 0; }
 .sidebar { width: var(--side-w); flex: 0 0 var(--side-w); background: var(--ink); color: #cbd5e1; display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; height: 100dvh; z-index: 40; }
-.sidebar-head { display: flex; align-items: center; justify-content: space-between; padding: 18px 18px 14px; color: #fff; }
+.sidebar-head { display: flex; align-items: center; justify-content: space-between; padding: calc(18px + env(safe-area-inset-top)) 18px 14px; color: #fff; }
 .sidebar-close { display: none; background: none; border: 0; color: #cbd5e1; font-size: 28px; line-height: 1; cursor: pointer; padding: 0 4px; }
 .sidebar nav { flex: 1; overflow-y: auto; padding: 4px 10px; display: flex; flex-direction: column; gap: 2px; }
 .sidebar nav a { display: flex; align-items: center; gap: 12px; color: #cbd5e1; text-decoration: none; padding: 9px 12px; border-radius: 8px; white-space: nowrap; }
@@ -321,8 +321,8 @@ img, svg { max-width: 100%; }
 .mobilebar, .scrim { display: none; }
 
 @media (max-width: 900px) {
-  :root { --topbar-h: 52px; }
-  .mobilebar { display: flex; align-items: center; gap: 12px; height: var(--topbar-h); padding: 0 12px; background: var(--ink); color: #fff; position: fixed; top: 0; left: 0; right: 0; z-index: 30; }
+  :root { --topbar-h: calc(52px + env(safe-area-inset-top)); }
+  .mobilebar { display: flex; align-items: center; gap: 12px; height: var(--topbar-h); padding: env(safe-area-inset-top) 12px 0; background: var(--ink); color: #fff; position: fixed; top: 0; left: 0; right: 0; z-index: 30; }
   .app { display: block; }
   .content { padding-top: var(--topbar-h); }
   .burger { position: relative; background: none; border: 0; color: #fff; width: 40px; height: 40px; display: grid; place-items: center; cursor: pointer; border-radius: 8px; }
