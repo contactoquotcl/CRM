@@ -146,7 +146,7 @@ const bucket = (d, group) => (group === 'year' ? d.slice(0, 4) : group === 'day'
 export async function metrics({ from, to, group = 'month', channel = '', userId = 0, dedupe = true } = {}) {
   const f = from || '1900-01-01'; const t = to || '2999-12-31';
   const quotes = (await query(
-    `SELECT q.id, q.number, q.quote_date::text AS d, q.rut, q.razon_social, q.subtotal, q.total, q.channel, q.created_by, COALESCE(u.name, CASE WHEN q.channel='Chatbot' THEN 'Chatbot' ELSE '(sin usuario)' END) AS user_name
+    `SELECT q.id, q.number, q.quote_date::text AS d, q.rut, q.razon_social, q.subtotal, q.total, q.channel, q.created_by, (SELECT COALESCE(SUM(i.cost * i.qty), 0)::int FROM quote_items i WHERE i.quote_id = q.id) AS cost_total, COALESCE(u.name, CASE WHEN q.channel='Chatbot' THEN 'Chatbot' ELSE '(sin usuario)' END) AS user_name
        FROM quotes q LEFT JOIN users u ON u.id=q.created_by WHERE q.total > 0 ORDER BY q.quote_date, q.id`)).rows;
   const invs = (await query('SELECT id, tipo, folio, fecha::text AS fecha, rut, razon, neto, total, quote_id, match FROM invoices ORDER BY fecha, id')).rows;
   const byQuote = new Map(invs.filter((i) => i.quote_id).map((i) => [i.quote_id, i]));
@@ -166,6 +166,7 @@ export async function metrics({ from, to, group = 'month', channel = '', userId 
     const hit = o.members.map((m) => byQuote.get(m.id)).filter(Boolean).sort((a, b) => a.fecha.localeCompare(b.fecha))[0];
     o.invoice = hit || null;
   }
+  const mgn = (list) => { const k = list.filter((o) => o.cost_total > 0); const net = k.reduce((a, o) => a + o.subtotal, 0); const m = k.reduce((a, o) => a + (o.subtotal - o.cost_total), 0); return { margin_net: m, margin_pct: net > 0 ? Math.round((m / net) * 1000) / 10 : null, margin_base_net: net, margin_count: k.length }; };
   const inQ = (o) => o.d >= f && o.d <= t && (!channel || o.channel === channel) && (!userId || o.created_by === userId);
   const sel = opps.filter(inQ);
   const conv = sel.filter((o) => o.invoice);
@@ -180,14 +181,14 @@ export async function metrics({ from, to, group = 'month', channel = '', userId 
   const pct = (a, b) => (b > 0 ? Math.round((a / b) * 1000) / 10 : 0);
 
   const series = new Map();
-  const slot = (p) => series.get(p) || series.set(p, { period: p, quoted_count: 0, quoted_net: 0, converted_count: 0, converted_net: 0, invoiced_net: 0, invoiced_from_quotes_net: 0 }).get(p);
-  for (const o of sel) { const s = slot(bucket(o.d, group)); s.quoted_count++; s.quoted_net += o.subtotal; if (o.invoice) { s.converted_count++; s.converted_net += o.subtotal; } }
+  const slot = (p) => series.get(p) || series.set(p, { period: p, quoted_count: 0, quoted_net: 0, quoted_margin_net: 0, quoted_margin_base: 0, converted_count: 0, converted_net: 0, invoiced_net: 0, invoiced_from_quotes_net: 0 }).get(p);
+  for (const o of sel) { const s = slot(bucket(o.d, group)); s.quoted_count++; s.quoted_net += o.subtotal; if (o.cost_total > 0) { s.quoted_margin_net += o.subtotal - o.cost_total; s.quoted_margin_base += o.subtotal; } if (o.invoice) { s.converted_count++; s.converted_net += o.subtotal; } }
   for (const i of sales) { const s = slot(bucket(i.fecha, group)); s.invoiced_net += i.neto + (i.tipo === 34 ? sum([i], 'total') - i.neto : 0); if (i.quote_id) s.invoiced_from_quotes_net += i.neto; }
   for (const i of ncs) { slot(bucket(i.fecha, group)).invoiced_net -= i.neto; }
   const groupBy = (keyFn) => {
     const m = new Map();
-    for (const o of sel) { const k = keyFn(o); const r = m.get(k) || m.set(k, { name: k, quoted_count: 0, quoted_net: 0, converted_count: 0, converted_net: 0 }).get(k); r.quoted_count++; r.quoted_net += o.subtotal; if (o.invoice) { r.converted_count++; r.converted_net += o.subtotal; } }
-    return [...m.values()].map((r) => ({ ...r, pct_count: pct(r.converted_count, r.quoted_count), pct_amount: pct(r.converted_net, r.quoted_net) })).sort((a, b) => b.quoted_net - a.quoted_net);
+    for (const o of sel) { const k = keyFn(o); const r = m.get(k) || m.set(k, { name: k, quoted_count: 0, quoted_net: 0, converted_count: 0, converted_net: 0, _mn: 0, _mb: 0 }).get(k); r.quoted_count++; r.quoted_net += o.subtotal; if (o.cost_total > 0) { r._mn += o.subtotal - o.cost_total; r._mb += o.subtotal; } if (o.invoice) { r.converted_count++; r.converted_net += o.subtotal; } }
+    return [...m.values()].map(({ _mn, _mb, ...r }) => ({ ...r, margin_net: _mn, margin_pct: _mb > 0 ? Math.round((_mn / _mb) * 1000) / 10 : null, pct_count: pct(r.converted_count, r.quoted_count), pct_amount: pct(r.converted_net, r.quoted_net) })).sort((a, b) => b.quoted_net - a.quoted_net);
   };
   const today = new Date().toISOString().slice(0, 10);
   const lastInv = invs.length ? invs[invs.length - 1].fecha : null;
@@ -196,6 +197,8 @@ export async function metrics({ from, to, group = 'month', channel = '', userId 
     range: { from: f, to: t, group },
     kpis: {
       quoted_count: sel.length, quoted_net: sum(sel, 'subtotal'),
+      quoted_margin_net: mgn(sel).margin_net, quoted_margin_pct: mgn(sel).margin_pct, quoted_margin_base_net: mgn(sel).margin_base_net, quoted_margin_count: mgn(sel).margin_count,
+      converted_margin_net: mgn(conv).margin_net, converted_margin_pct: mgn(conv).margin_pct,
       converted_count: conv.length, converted_net: sum(conv, 'subtotal'), invoiced_for_converted_net: conv.reduce((s, o) => s + o.invoice.neto, 0),
       pct_count: pct(conv.length, sel.length), pct_amount: pct(sum(conv, 'subtotal'), sum(sel, 'subtotal')),
       invoiced_net: sum(sales, 'neto') - sum(ncs, 'neto'), invoiced_count: sales.length, nc_net: sum(ncs, 'neto'),
@@ -205,10 +208,10 @@ export async function metrics({ from, to, group = 'month', channel = '', userId 
       avg_invoice_net: sales.length ? Math.round(sum(sales, 'neto') / sales.length) : 0,
       raw_quotes: quotes.filter((q) => q.d >= f && q.d <= t && (!channel || q.channel === channel) && (!userId || q.created_by === userId)).length,
     },
-    series: [...series.values()].sort((a, b) => a.period.localeCompare(b.period)).map((s) => ({ ...s, pct_count: pct(s.converted_count, s.quoted_count) })),
+    series: [...series.values()].sort((a, b) => a.period.localeCompare(b.period)).map((s) => ({ ...s, pct_count: pct(s.converted_count, s.quoted_count), margin_pct: s.quoted_margin_base > 0 ? Math.round((s.quoted_margin_net / s.quoted_margin_base) * 1000) / 10 : null })),
     by_user: groupBy((o) => o.user_name),
     by_channel: groupBy((o) => o.channel || 'Cotizador'),
-    open: sel.filter((o) => !o.invoice).sort((a, b) => b.subtotal - a.subtotal).slice(0, 15).map((o) => ({ id: o.id, number: o.number, date: o.d, client: o.razon_social, net: o.subtotal, total: o.total, channel: o.channel, user: o.user_name, age_days: dayDiff(o.d, today) })),
+    open: sel.filter((o) => !o.invoice).sort((a, b) => b.subtotal - a.subtotal).slice(0, 15).map((o) => ({ id: o.id, number: o.number, date: o.d, client: o.razon_social, net: o.subtotal, margin_pct: o.cost_total > 0 && o.subtotal > 0 ? Math.round(((o.subtotal - o.cost_total) / o.subtotal) * 1000) / 10 : null, total: o.total, channel: o.channel, user: o.user_name, age_days: dayDiff(o.d, today) })),
     unmatched_invoices: noQuote.sort((a, b) => b.neto - a.neto).slice(0, 15).map((i) => ({ id: i.id, tipo: i.tipo, folio: i.folio, fecha: i.fecha, rut: i.rut, razon: i.razon, neto: i.neto, total: i.total })),
     coverage: { invoices: meta.n, last_invoice_date: lastInv, last_upload: meta.last_upload, today },
   };

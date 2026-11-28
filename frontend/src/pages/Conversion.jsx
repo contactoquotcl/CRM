@@ -42,7 +42,7 @@ function Bars({ series }) {
           const w = Math.min(18, bw / 3);
           return (
             <g key={s.period}>
-              <title>{`${s.period}\nCotizado: ${clp(s.quoted_net)} (${s.quoted_count})\nConvertido: ${clp(s.converted_net)} (${s.converted_count}, ${pctTxt(s.pct_count)})\nFacturado: ${clp(s.invoiced_net)}`}</title>
+              <title>{`${s.period}\nCotizado: ${clp(s.quoted_net)} (${s.quoted_count})\nConvertido: ${clp(s.converted_net)} (${s.converted_count}, ${pctTxt(s.pct_count)})\nMargen cotizado: ${s.margin_pct === null ? '—' : `${clp(s.quoted_margin_net)} (${pctTxt(s.margin_pct)})`}\nFacturado: ${clp(s.invoiced_net)}`}</title>
               <rect x={x + bw / 2 - w - 1} y={y(s.quoted_net)} width={w} height={H - pad.b - y(s.quoted_net)} fill="#93c5fd" rx="2" />
               <rect x={x + bw / 2 + 1} y={y(Math.max(s.invoiced_net, 0))} width={w} height={H - pad.b - y(Math.max(s.invoiced_net, 0))} fill="#16a34a" rx="2" />
               <text x={x + bw / 2} y={H - 20} fontSize="10" textAnchor="middle" fill="#334155">{s.period.length > 7 ? s.period.slice(5) : s.period}</text>
@@ -60,10 +60,10 @@ function Breakdown({ title, rows }) {
   return (
     <div className="table-wrap" style={{ marginBottom: 16 }}>
       <table>
-        <thead><tr><th>{title}</th><th className="num">Cotiz.</th><th className="num">Convert.</th><th className="num">% cant.</th><th className="num">Cotizado neto</th><th className="num">% monto</th></tr></thead>
+        <thead><tr><th>{title}</th><th className="num">Cotiz.</th><th className="num">Convert.</th><th className="num">% cant.</th><th className="num">Cotizado neto</th><th className="num">% monto</th><th className="num">Margen %</th></tr></thead>
         <tbody>
-          {rows.map((r) => <tr key={r.name}><td>{r.name}</td><td className="num">{r.quoted_count}</td><td className="num">{r.converted_count}</td><td className="num"><b>{pctTxt(r.pct_count)}</b></td><td className="num">{clp(r.quoted_net)}</td><td className="num">{pctTxt(r.pct_amount)}</td></tr>)}
-          {!rows.length && <tr><td colSpan="6" className="muted">Sin datos</td></tr>}
+          {rows.map((r) => <tr key={r.name}><td>{r.name}</td><td className="num">{r.quoted_count}</td><td className="num">{r.converted_count}</td><td className="num"><b>{pctTxt(r.pct_count)}</b></td><td className="num">{clp(r.quoted_net)}</td><td className="num">{pctTxt(r.pct_amount)}</td><td className="num">{r.margin_pct === null ? '—' : pctTxt(r.margin_pct)}</td></tr>)}
+          {!rows.length && <tr><td colSpan="7" className="muted">Sin datos</td></tr>}
         </tbody>
       </table>
     </div>
@@ -161,6 +161,8 @@ export default function Conversion() {
             <Kpi label="% conversión (cantidad)" value={pctTxt(k.pct_count)} sub={`${k.converted_count} de ${k.quoted_count} cotizaciones${k.raw_quotes !== k.quoted_count ? ` (${k.raw_quotes} emitidas, repetidas agrupadas)` : ''}`} color="#1d4ed8" />
             <Kpi label="% conversión (monto)" value={pctTxt(k.pct_amount)} sub={`${clp(k.converted_net)} de ${clp(k.quoted_net)} neto`} color="#7c3aed" />
             <Kpi label="Cotizado (neto)" value={clp(k.quoted_net)} sub={`${k.quoted_count} oportunidades`} color="#60a5fa" />
+            <Kpi label="Margen cotizado ($)" value={k.quoted_margin_count ? clp(k.quoted_margin_net) : '—'} sub={k.quoted_margin_count ? `ponderado por monto${k.quoted_margin_count < k.quoted_count ? ` · ${k.quoted_margin_count} de ${k.quoted_count} cotizaciones con costo` : ''}` : 'sin costos registrados'} color="#0d9488" />
+            <Kpi label="Margen cotizado (%)" value={k.quoted_margin_pct === null ? '—' : pctTxt(k.quoted_margin_pct)} sub={k.converted_margin_pct === null ? 'sobre la venta neta' : `convertidas: ${pctTxt(k.converted_margin_pct)} (${clp(k.converted_margin_net)})`} color="#0d9488" />
             <Kpi label="Facturado (neto)" value={clp(k.invoiced_net)} sub={`${k.invoiced_count} facturas${k.nc_net ? ` · NC ${clp(k.nc_net)}` : ''}`} color="#16a34a" />
             <Kpi label="Facturación con cotización" value={pctTxt(k.pct_invoiced_from_quotes)} sub={`${clp(k.invoiced_from_quotes_net)} · sin cotización ${clp(k.invoiced_without_quote_net)}`} color="#f59e0b" />
             <Kpi label="Días cotización → factura" value={k.avg_days_to_invoice ?? '—'} sub={`ticket promedio ${clp(k.avg_invoice_net)}`} color="#0ea5e9" />
@@ -192,10 +194,10 @@ export default function Conversion() {
           <h3>Cotizaciones abiertas más grandes</h3>
           <div className="table-wrap">
             <table>
-              <thead><tr><th>N°</th><th>Fecha</th><th>Cliente</th><th>Canal</th><th>Ejecutivo</th><th className="num">Neto</th><th className="num">Antigüedad</th></tr></thead>
+              <thead><tr><th>N°</th><th>Fecha</th><th>Cliente</th><th>Canal</th><th>Ejecutivo</th><th className="num">Neto</th><th className="num">Margen %</th><th className="num">Antigüedad</th></tr></thead>
               <tbody>
-                {data.open.map((o) => <tr key={o.id}><td>{o.number}</td><td>{fmtDate(o.date)}</td><td>{o.client}</td><td><Badge>{o.channel || 'Cotizador'}</Badge></td><td>{o.user}</td><td className="num">{clp(o.net)}</td><td className="num">{o.age_days} d</td></tr>)}
-                {!data.open.length && <tr><td colSpan="7" className="muted">Sin cotizaciones abiertas</td></tr>}
+                {data.open.map((o) => <tr key={o.id}><td>{o.number}</td><td>{fmtDate(o.date)}</td><td>{o.client}</td><td><Badge>{o.channel || 'Cotizador'}</Badge></td><td>{o.user}</td><td className="num">{clp(o.net)}</td><td className="num">{o.margin_pct === null ? '—' : pctTxt(o.margin_pct)}</td><td className="num">{o.age_days} d</td></tr>)}
+                {!data.open.length && <tr><td colSpan="8" className="muted">Sin cotizaciones abiertas</td></tr>}
               </tbody>
             </table>
           </div>

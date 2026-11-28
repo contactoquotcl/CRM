@@ -97,3 +97,29 @@ test('vínculo manual, «sin cotización» y solo admin', async () => {
   assert.equal(m.kpis.converted_count, 1);
   assert.equal((await api('GET', '/api/conversion', null, null)).status, 401);
 });
+
+test('margen: por cotización y ponderado en el dashboard', async () => {
+  // mk() crea con margen 0 → venta = costo. Cotizaciones con margen real: costo 80.000 / margen 20 % y costo 70.000 / margen 30 %
+  const mkM = async (rut, cost, margin) => {
+    const q = await createQuote({ client: { rut, razon_social: 'Margen ' + rut, email: 'a@b.cl', contact: 'X', phone: '1' }, margin, items: [{ sku: 'S', description: 'Item', qty: 1, cost }] }, { channel: 'Cotizador' });
+    await query('UPDATE quotes SET quote_date=$1 WHERE id=$2', ['2026-10-05', q.id]);
+    return q;
+  };
+  const a = await mkM('33333333-3', 80000, 20); // venta 100.000 → margen 20.000 (20 %)
+  const b = await mkM('44444444-4', 70000, 30); // venta 100.000 → margen 30.000 (30 %)
+  const list = (await api('GET', '/api/quotes?q=Margen')).data;
+  const ra = list.find((r) => r.id === a.id), rb = list.find((r) => r.id === b.id);
+  assert.equal(ra.margin_amount, 20000); assert.equal(ra.margin_real_pct, 20);
+  assert.equal(rb.margin_amount, 30000); assert.equal(rb.margin_real_pct, 30);
+  assert.equal((await api('GET', `/api/quotes/${a.id}`)).data.margin_amount, 20000);
+  // sin costos registrados (cotización antigua) no hay margen
+  await query('UPDATE quote_items SET cost=0 WHERE quote_id=$1', [b.id]);
+  assert.equal((await api('GET', `/api/quotes/${b.id}`)).data.margin_amount, null);
+  await query('UPDATE quote_items SET cost=70000 WHERE quote_id=$1', [b.id]);
+
+  const m = (await api('GET', '/api/conversion?from=2026-10-01&to=2026-10-31&group=month')).data;
+  assert.equal(m.kpis.quoted_margin_net, 50000);
+  assert.equal(m.kpis.quoted_margin_pct, 25); // ponderado: 50.000 / 200.000
+  assert.equal(m.series[0].margin_pct, 25);
+  assert.equal(m.by_channel[0].margin_pct, 25);
+});

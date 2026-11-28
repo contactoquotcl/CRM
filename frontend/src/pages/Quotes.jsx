@@ -22,7 +22,7 @@ export default function Quotes() {
       <Alert>{error}</Alert>
       <div className="table-wrap">
         <table>
-          <thead><tr><th>N°</th><th>Fecha</th><th>Razón social</th><th>RUT</th><th>Contacto</th><th>Creada por</th><th className="num">Total c/IVA</th><th /></tr></thead>
+          <thead><tr><th>N°</th><th>Fecha</th><th>Razón social</th><th>RUT</th><th>Contacto</th><th>Creada por</th><th className="num">Neto</th><th className="num" title="Solo interno: neto de venta menos costo">Margen $</th><th className="num">Margen %</th><th className="num">Total c/IVA</th><th /></tr></thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.id}>
@@ -32,6 +32,9 @@ export default function Quotes() {
                 <td>{r.rut}</td>
                 <td>{r.contact}</td>
                 <td>{r.created_by_name || '—'}</td>
+                <td className="num">{clp(r.subtotal)}</td>
+                <td className="num">{r.margin_amount === null ? <span className="muted" title="Cotización antigua sin costos registrados">—</span> : <span style={{ color: r.margin_amount < 0 ? '#b91c1c' : undefined }}>{clp(r.margin_amount)}</span>}</td>
+                <td className="num">{r.margin_real_pct === null ? <span className="muted">—</span> : <strong>{String(r.margin_real_pct).replace('.', ',')}%</strong>}</td>
                 <td className="num">{clp(r.total)}</td>
                 <td><button className="btn small" onClick={() => api.openPdf(r.id).catch((e) => setError(e.message))}>PDF</button></td>
               </tr>

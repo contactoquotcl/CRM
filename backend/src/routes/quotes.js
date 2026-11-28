@@ -9,8 +9,15 @@ export const quotesRouter = Router();
 quotesRouter.use(authenticate);
 
 const QUOTE_SELECT = `SELECT q.id, q.number, q.lead_id, q.quote_date::text AS quote_date, q.validity_days, q.rut, q.razon_social, q.email, q.contact, q.phone,
-  q.notes, q.iva_rate, q.margin_pct, q.subtotal, q.iva, q.total, q.created_by, q.created_at, q.channel, q.conversation_id, u.name AS created_by_name
+  q.notes, q.iva_rate, q.margin_pct, q.subtotal, q.iva, q.total, q.created_by, q.created_at, q.channel, q.conversation_id, u.name AS created_by_name,
+  (SELECT COALESCE(SUM(i.cost * i.qty), 0)::int FROM quote_items i WHERE i.quote_id = q.id) AS cost_total
   FROM quotes q LEFT JOIN users u ON u.id = q.created_by`;
+
+/** Margen real de la cotización (neto de venta − costo) y % sobre la venta. null si no hay costo registrado (cotizaciones antiguas). */
+const withMargin = (r) => {
+  const known = r.cost_total > 0;
+  return { ...r, margin_amount: known ? r.subtotal - r.cost_total : null, margin_real_pct: known && r.subtotal > 0 ? Math.round(((r.subtotal - r.cost_total) / r.subtotal) * 1000) / 10 : null };
+};
 
 quotesRouter.get('/', async (req, res) => {
   const q = String(req.query.q || '').trim().toLowerCase();
@@ -21,7 +28,7 @@ quotesRouter.get('/', async (req, res) => {
     where = `WHERE LOWER(q.razon_social) LIKE $1 OR LOWER(q.rut) LIKE $1 OR CAST(q.number AS TEXT) LIKE $1 OR LOWER(q.contact) LIKE $1 OR LOWER(u.name) LIKE $1`;
   }
   const { rows } = await query(`${QUOTE_SELECT} ${where} ORDER BY q.number DESC LIMIT 500`, params);
-  res.json(rows);
+  res.json(rows.map(withMargin));
 });
 
 quotesRouter.get('/:id', async (req, res) => {
@@ -29,7 +36,7 @@ quotesRouter.get('/:id', async (req, res) => {
   const { rows } = await query(`${QUOTE_SELECT} WHERE q.id=$1`, [id]);
   if (!rows[0]) throw new HttpError(404, 'Cotización no encontrada');
   const items = await query('SELECT id, position, product_id, sku, description, qty, cost, margin_pct, unit_price, line_total FROM quote_items WHERE quote_id=$1 ORDER BY position', [id]);
-  res.json({ ...rows[0], items: items.rows });
+  res.json({ ...withMargin(rows[0]), items: items.rows });
 });
 
 quotesRouter.get('/:id/pdf', async (req, res) => {
