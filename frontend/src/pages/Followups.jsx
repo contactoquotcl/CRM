@@ -5,6 +5,7 @@ import { Alert, Badge, Modal } from '../ui.jsx';
 import { clp, fmtDate } from '../util.js';
 
 const STAGES = ['Cotizado', 'Seguimiento 1', 'Seguimiento 2'];
+const STAGE_COLOR = { Cotizado: '#2563eb', 'Seguimiento 1': '#d97706', 'Seguimiento 2': '#ea580c' };
 const MODE = { manual: ['Manual', '#64748b'], auto: ['Automático', '#16a34a'], pausado: ['Pausado', '#b45309'] };
 const STEP_LABEL = { s1: 'Seguimiento 1', s2: 'Seguimiento 2', close: 'Archivado', reply: 'Respuesta del cliente', quote: 'Cotización enviada' };
 const fmtDT = (t) => new Date(t).toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short' });
@@ -12,7 +13,8 @@ const fmtDT = (t) => new Date(t).toLocaleString('es-CL', { dateStyle: 'short', t
 export default function Followups() {
   const [data, setData] = useState(null);
   const [channel, setChannel] = useState('all');
-  const [stage, setStage] = useState('Cotizado');
+  const [view, setView] = useState('lista'); // lista | historial
+  const [search, setSearch] = useState('');
   const [sel, setSel] = useState(new Set());
   const [log, setLog] = useState([]);
   const [error, setError] = useState('');
@@ -25,9 +27,9 @@ export default function Followups() {
   const load = useCallback(async () => {
     try {
       setData(await api.get(`/api/followups?channel=${channel}`));
-      if (stage === 'Historial') setLog(await api.get('/api/followups/log'));
+      if (view === 'historial') setLog(await api.get('/api/followups/log'));
     } catch (e) { setError(e.message); }
-  }, [channel, stage]);
+  }, [channel, view]);
   useEffect(() => { load(); }, [load]);
   // El pipeline manda: se refresca solo y al volver a la pestaña para reflejar movimientos manuales de etapa
   useEffect(() => {
@@ -36,20 +38,32 @@ export default function Followups() {
     document.addEventListener('visibilitychange', onVis);
     return () => { clearInterval(t); document.removeEventListener('visibilitychange', onVis); };
   }, [load]);
-  useEffect(() => { setSel(new Set()); }, [stage, channel]);
+  useEffect(() => { setSel(new Set()); }, [view, channel]);
 
-  const rows = useMemo(() => (data?.rows || []).filter((r) => r.state_name === stage), [data, stage]);
+  // Una sola tabla con todos los clientes en seguimiento: primero los que ya tocan (más días en la etapa arriba)
+  const rows = useMemo(() => {
+    const t = search.trim().toLowerCase();
+    return (data?.rows || [])
+      .filter((r) => !t || `${r.number} ${r.razon_social} ${r.contact} ${r.email} ${(r.created_by_names || []).join(' ')}`.toLowerCase().includes(t))
+      .sort((a, b) => Number(b.due && !b.problems.length) - Number(a.due && !a.problems.length) || b.days_in_state - a.days_in_state);
+  }, [data, search]);
   const counts = useMemo(() => Object.fromEntries(STAGES.map((s) => [s, (data?.rows || []).filter((r) => r.state_name === s).length])), [data]);
+  const dueCount = useMemo(() => (data?.rows || []).filter((r) => r.due && !r.problems.length).length, [data]);
   const allSel = rows.length > 0 && rows.every((r) => sel.has(r.lead_id));
   const toggle = (id) => setSel((p) => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const ids = [...sel];
-  const next = rows[0]?.next_label;
 
   const openConfirm = async () => {
     setError(''); setMsg('');
     try {
-      const first = rows.find((r) => sel.has(r.lead_id));
-      setConfirm({ preview: await api.get(`/api/followups/preview/${first.lead_id}`), ids });
+      // Los seleccionados pueden estar en distintas etapas: una vista previa por cada paso distinto
+      const chosen = rows.filter((r) => sel.has(r.lead_id));
+      const groups = [];
+      for (const st of STAGES) {
+        const inStage = chosen.filter((r) => r.state_name === st);
+        if (inStage.length) groups.push({ state: st, count: inStage.length, preview: await api.get(`/api/followups/preview/${inStage[0].lead_id}`) });
+      }
+      setConfirm({ groups, ids });
     } catch (e) { setError(e.message); }
   };
   const send = async () => {
@@ -103,16 +117,20 @@ export default function Followups() {
       {data?.hidden_without_quote > 0 && <p className="muted small">Hay {data.hidden_without_quote} leads en etapas de cotización sin N° de cotización (derivaciones del chat sin cotizar): no se incluyen aquí.</p>}
       {data && <p className="muted small">Correos enviados hoy: <strong>{data.sent_today}</strong>{data.daily_limit ? ` de ${data.daily_limit} permitidos` : ''} · Servicio: {data.provider} · Cada correo lleva el PDF adjunto cuando la cotización está registrada y responde a contacto@quot.cl.{data.provider === 'Gmail' ? ' Si el cliente responde, la cotización se pausa sola.' : ''}</p>}
 
-      <div className="seg" style={{ marginBottom: 12 }}>
-        {STAGES.map((s) => <button key={s} className={stage === s ? 'on' : ''} onClick={() => setStage(s)}>{s} ({counts[s] ?? 0})</button>)}
-        <button className={stage === 'Historial' ? 'on' : ''} onClick={() => setStage('Historial')}>Historial de envíos</button>
+      <div className="row" style={{ marginBottom: 12, gap: 10, flexWrap: 'wrap' }}>
+        <div className="seg">
+          <button className={view === 'lista' ? 'on' : ''} onClick={() => setView('lista')}>Clientes en seguimiento ({data?.rows?.length ?? 0})</button>
+          <button className={view === 'historial' ? 'on' : ''} onClick={() => setView('historial')}>Historial de envíos</button>
+        </div>
+        {view === 'lista' && <input className="search" placeholder="Buscar por N°, cliente, contacto o creador…" value={search} onChange={(e) => setSearch(e.target.value)} style={{ maxWidth: 340 }} />}
+        {view === 'lista' && data && <span className="muted small">{STAGES.map((st) => `${st}: ${counts[st] ?? 0}`).join(' · ')} · <strong>Ya tocan: {dueCount}</strong></span>}
       </div>
 
-      {stage !== 'Historial' && (
+      {view === 'lista' && (
         <>
           <div className="row" style={{ marginBottom: 10, gap: 8 }}>
-            <button className="btn primary" disabled={!ids.length || busy} onClick={openConfirm}>
-              {stage === 'Seguimiento 2' ? `Archivar${data?.send_on_archive ? ' y avisar' : ''} (${ids.length})` : `Enviar ${next || 'seguimiento'} y avanzar (${ids.length})`}
+            <button className="btn primary" disabled={!ids.length || busy} onClick={openConfirm} title="Cada cliente recibe el siguiente paso según su estado y avanza en el pipeline">
+              {`Enviar siguiente paso y avanzar (${ids.length})`}
             </button>
             <button className="btn" disabled={!ids.length || busy} onClick={openSched} title="Elige fecha y hora; se envía solo y avanza de etapa">Programar envío</button>
             <button className="btn" disabled={!ids.length} onClick={unsched}>Cancelar programación</button>
@@ -127,7 +145,7 @@ export default function Followups() {
             <table>
               <thead><tr>
                 <th><input type="checkbox" checked={allSel} onChange={() => setSel(allSel ? new Set() : new Set(rows.map((r) => r.lead_id)))} aria-label="Seleccionar todas" /></th>
-                <th>N°</th><th>Cliente</th><th>Creada por</th><th>Contacto / correo</th><th className="num">Total c/IVA</th><th>En etapa</th><th>Toca / programado</th><th>Modo</th><th>Último correo</th>
+                <th>N°</th><th>Cliente</th><th>Creada por</th><th>Contacto / correo</th><th className="num">Total c/IVA</th><th>Estado en el pipeline</th><th>Siguiente paso</th><th>Modo</th><th>Último correo</th>
               </tr></thead>
               <tbody>
                 {rows.map((r) => (
@@ -138,20 +156,20 @@ export default function Followups() {
                     <td>{r.created_by_names?.length ? r.created_by_names.join(', ') : <span className="muted">—</span>}</td>
                     <td>{r.contact}<div className="muted small">{r.email || '—'}</div>{r.problems.map((p) => <Badge key={p} color="#dc2626">{p}</Badge>)}</td>
                     <td className="num">{r.total > 0 ? clp(r.total) : '—'}{r.quote_count > 1 && <div className="muted small">suma de {r.quote_count}</div>}</td>
-                    <td>{r.days_in_state} d</td>
-                    <td>{r.due ? <Badge color="#16a34a">ya toca</Badge> : <span className="muted">en {r.due_in_days} d</span>}{r.follow_sched_at && <div><Badge color="#7c3aed">Programado</Badge><div className="small">{fmtDT(r.follow_sched_at)}</div></div>}</td>
+                    <td><Badge color={STAGE_COLOR[r.state_name]}>{r.state_name}</Badge><div className="muted small">{r.days_in_state} d en esta etapa</div></td>
+                    <td><div className="small">{r.state_name === 'Seguimiento 2' ? 'Archivar' : `Enviar ${r.next_label}`}</div>{r.due ? <Badge color="#16a34a">ya toca</Badge> : <span className="muted">en {r.due_in_days} d</span>}{r.follow_sched_at && <div><Badge color="#7c3aed">Programado</Badge><div className="small">{fmtDT(r.follow_sched_at)}</div></div>}</td>
                     <td><Badge color={MODE[r.follow_mode]?.[1]}>{MODE[r.follow_mode]?.[0] || r.follow_mode}</Badge></td>
                     <td className="small">{r.last_email ? <>{STEP_LABEL[r.last_email.step]} · {r.last_email.status}<br /><span className="muted">{fmtDT(r.last_email.created_at)}</span></> : <span className="muted">—</span>}</td>
                   </tr>
                 ))}
-                {data && !rows.length && <tr><td colSpan="9" className="muted">No hay cotizaciones en «{stage}».</td></tr>}
+                {data && !rows.length && <tr><td colSpan="10" className="muted">{search ? 'Sin resultados para la búsqueda.' : 'No hay clientes en seguimiento.'}</td></tr>}
               </tbody>
             </table>
           </div>
         </>
       )}
 
-      {stage === 'Historial' && (
+      {view === 'historial' && (
         <div className="table-wrap">
           <table>
             <thead><tr><th>Fecha</th><th>Cotización</th><th>Paso</th><th>Para</th><th>Asunto</th><th>Resultado</th><th>Origen</th></tr></thead>
@@ -174,29 +192,30 @@ export default function Followups() {
       )}
 
       {confirm && (
-        <Modal title={confirm.preview.error ? 'No se puede avanzar' : `${confirm.preview.label}: ${confirm.ids.length} cotización(es)`} onClose={() => setConfirm(null)} wide>
-          {confirm.preview.error ? <p>{confirm.preview.error}</p> : (
-            <>
-              <p>Cada cotización pasará de <strong>{stage}</strong> a <strong>{confirm.preview.to_state}</strong>{confirm.preview.sends_mail ? ', enviando el correo con su PDF adjunto' : ' (se archiva sin enviar correo; puedes activar el aviso en Admin)'}.</p>
-              {confirm.preview.sends_mail && (
-                <div className="panel" style={{ background: '#f8fafc' }}>
-                  <div className="muted small">Vista previa con la cotización N° {confirm.preview.number} · Para: {confirm.preview.to || '—'} · Adjunto: {confirm.preview.attachment || 'sin adjunto (cotización antigua sin PDF registrado)'}</div>
-                  <div style={{ margin: '6px 0' }}><strong>{confirm.preview.subject}</strong></div>
-                  <div style={{ whiteSpace: 'pre-wrap' }}>{confirm.preview.text}</div>
-                </div>
+        <Modal title={`Enviar siguiente paso: ${confirm.ids.length} cliente(s)`} onClose={() => setConfirm(null)} wide>
+          <p>Cada cliente recibe el paso que le corresponde según su estado y avanza en el pipeline:</p>
+          {confirm.groups.map((g) => (
+            <div key={g.state} className="panel" style={{ background: '#f8fafc' }}>
+              <p style={{ margin: 0 }}><Badge color={STAGE_COLOR[g.state]}>{g.state}</Badge> → <strong>{g.preview.to_state || '—'}</strong> · {g.count} cliente(s){g.preview.error ? '' : g.preview.sends_mail ? ', con correo y PDF adjunto' : ' (se archiva sin enviar correo; puedes activar el aviso en Admin)'}</p>
+              {g.preview.error ? <p className="err">{g.preview.error}</p> : g.preview.sends_mail && (
+                <>
+                  <div className="muted small" style={{ marginTop: 6 }}>Vista previa con la cotización N° {g.preview.number} · Para: {g.preview.to || '—'} · Adjunto: {g.preview.attachment || 'sin adjunto (cotización antigua sin PDF registrado)'}</div>
+                  <div style={{ margin: '6px 0' }}><strong>{g.preview.subject}</strong></div>
+                  <div style={{ whiteSpace: 'pre-wrap' }}>{g.preview.text}</div>
+                </>
               )}
-              <p className="muted small">Las plantillas se editan en Admin → Empresa y cotizador. Un paso ya enviado nunca se repite.</p>
-              <div className="modal-actions">
-                <button className="btn" onClick={() => setConfirm(null)}>Cancelar</button>
-                <button className="btn primary" disabled={busy} onClick={send}>{busy ? 'Enviando…' : `Confirmar (${confirm.ids.length})`}</button>
-              </div>
-            </>
-          )}
+            </div>
+          ))}
+          <p className="muted small">Las plantillas se editan en Admin → Empresa y cotizador. Un paso ya enviado nunca se repite.</p>
+          <div className="modal-actions">
+            <button className="btn" onClick={() => setConfirm(null)}>Cancelar</button>
+            <button className="btn primary" disabled={busy} onClick={send}>{busy ? 'Enviando…' : `Confirmar (${confirm.ids.length})`}</button>
+          </div>
         </Modal>
       )}
       {sched && (
         <Modal title={`Programar envío (${sched.ids.length})`} onClose={() => setSched(null)}>
-          <p>Se enviará el correo de <strong>{stage}</strong> con su PDF y la cotización avanzará de etapa automáticamente a esa hora.</p>
+          <p>Se enviará a esa hora el siguiente paso de cada cliente seleccionado (según su estado), con su PDF, y avanzará de etapa automáticamente.</p>
           <label className="field"><span>Fecha y hora</span><input type="datetime-local" value={sched.at} onChange={(e) => setSched({ ...sched, at: e.target.value })} /></label>
           <p className="muted small">El envío sale dentro de ~15 min de la hora elegida y solo si el servidor está activo. Se cancela si cambias la etapa o pausas la cotización; respeta el límite diario.</p>
           <div className="modal-actions"><button className="btn" onClick={() => setSched(null)}>Cancelar</button><button className="btn primary" disabled={busy || !sched.at} onClick={doSched}>Programar</button></div>
